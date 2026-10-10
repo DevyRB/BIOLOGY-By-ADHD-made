@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="เกมควิซชีววิทยา ม.4-ม.6 พร้อมแฟลชการ์ด คลังความรู้ และวิเคราะห์จุดอ่อน" />
+  <title>ชีววิทยา By ADHD made</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" id="brandHome" role="button" tabindex="0">
+      <span class="logo">🧬</span>
+      <div class="brand-text">
+        <strong>ชีววิทยา</strong>
+        <small>By ADHD made</small>
+      </div>
+    </div>
+    <nav class="topnav">
+      <button class="navbtn" data-nav="home">หน้าแรก</button>
+      <button class="navbtn" data-nav="knowledge">คลังความรู้</button>
+      <button class="navbtn" data-nav="stats">สถิติของฉัน</button>
+      <button class="navbtn" data-nav="flash">แฟลชการ์ด</button>
+    </nav>
+    <div class="profile" id="profileChip" role="button" tabindex="0"></div>
+  </header>
+
+  <main id="app"></main>
+
+  <footer class="footer">
+    <span>สร้างเพื่อการทบทวนชีววิทยา • ข้อมูลทั้งหมดถูกเก็บไว้ในเครื่องของคุณ (localStorage)</span>
+  </footer>
+
+  <!-- ข้อมูลข้อสอบแต่ละโหมด -->
+  <script src="data/m4-1.js"></script>
+  <script src="data/m4-2.js"></script>
+  <script src="data/m5-1.js"></script>
+  <script src="data/m5-2.js"></script>
+  <script src="data/m6-1.js"></script>
+  <script src="data/m6-2.js"></script>
+  <script src="data/knowledge.js"></script>
+
+  <!-- ตัวโปรแกรมหลัก -->
+  <script src="assets/app.js"></script>
+</body>
+</html>
