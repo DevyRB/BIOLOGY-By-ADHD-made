@@ -21,6 +21,7 @@
   /* ================= Data ================= */
   const DATA = window.BIO_DATA || {};
   const KNOW = window.BIO_KNOWLEDGE || {};
+  const QOVERRIDE = window.BIO_QUESTIONS || {};
 
   function ensureIds() {
     MODE_ORDER.forEach((mid) => {
@@ -28,6 +29,8 @@
       if (!mode) return;
       mode.id = mid;
       (mode.chapters || []).forEach((ch, ci) => {
+        const over = QOVERRIDE[mid] && QOVERRIDE[mid][ci];
+        if (over && over.length) ch.questions = over;
         ch._ci = ci;
         (ch.questions || []).forEach((q, qi) => {
           q.id = `${mid}-c${ci}-q${qi}`;
@@ -463,12 +466,48 @@
                   ${(sec.p || []).map((t) => `<p class="kpar">${esc(t)}</p>`).join("")}
                   ${sec.list ? `<ul class="klist">${sec.list.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
                 </div>`).join("")}
+              ${(chp.check && chp.check.length) ? `<div class="kcheck-wrap">
+                <h4 class="kcheck-title">🧠 ลองเช็คความเข้าใจ</h4>
+                ${chp.check.map((ck) => `
+                  <div class="kcheck">
+                    <div class="kcheck-q">${esc(ck.q)}</div>
+                    <div class="choices">
+                      ${ck.choices.map((c, ci) => `<button class="choice" data-i="${ci}"><span class="key">${LETTERS[ci]}</span><span>${esc(c)}</span></button>`).join("")}
+                    </div>
+                    <div class="kcheck-fb"></div>
+                  </div>`).join("")}
+              </div>` : ""}
             </div>
           </div>`).join("") + `</div>`;
       $$(".kchap", body).forEach((acc) => {
         $("button", acc).onclick = () => acc.classList.toggle("open");
       });
       const first = $(".kchap", body); if (first) first.classList.add("open");
+
+      // ผูกปุ่มคำถามท้ายบท
+      $$(".kchap", body).forEach((acc) => {
+        const chp = rich[+acc.dataset.i] || {};
+        const checks = chp.check || [];
+        $$(".kcheck", acc).forEach((box, qi) => {
+          const item = checks[qi]; if (!item) return;
+          const btns = $$(".choice", box);
+          btns.forEach((b, bi) => {
+            b.onclick = () => {
+              if (box.dataset.done) return;
+              box.dataset.done = "1";
+              btns.forEach((bb, k) => {
+                bb.classList.add("locked");
+                if (k === item.answer) bb.classList.add("correct");
+                if (k === bi && bi !== item.answer) bb.classList.add("wrong");
+              });
+              const ok = bi === item.answer;
+              $(".kcheck-fb", box).innerHTML = `<div class="feedback ${ok ? "ok" : "no"}">
+                <h4>${ok ? "✅ ถูกต้อง!" : `❌ ยังไม่ถูก — คำตอบที่ถูกคือ "${esc(item.choices[item.answer])}"`}</h4>
+                <p>${esc(item.explanation || "")}</p></div>`;
+            };
+          });
+        });
+      });
 
       const search = $("#kSearch", body);
       search.addEventListener("input", () => {
