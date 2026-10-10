@@ -444,17 +444,46 @@
     function renderKBody(mid) {
       const body = $("#kBody", wrap);
       const mode = DATA[mid];
-      const sections = mode ? mode.chapters.map((ch) => ({ title: ch.title, points: ch.notes || [] })) : [];
-      if (!sections.length) { body.innerHTML = `<div class="card muted">ยังไม่มีสรุปสำหรับโหมดนี้</div>`; return; }
-      body.innerHTML = sections.map((sec, i) => `
-        <div class="accordion" data-i="${i}">
-          <button><span>${esc(sec.title)}</span><span class="caret">▶</span></button>
-          <div class="content">${sec.points ? `<ul>${sec.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>` : esc(sec.text || "")}</div>
-        </div>`).join("");
-      $$(".accordion", body).forEach((acc) => {
+      const rich = (KNOW[mid] && KNOW[mid].length) ? KNOW[mid] : (mode ? mode.chapters.map((ch) => ({ chapter: ch.title, sections: [{ h: "สรุปสาระสำคัญ", list: ch.notes || [] }] })) : []);
+      if (!rich.length) { body.innerHTML = `<div class="card muted">ยังไม่มีสรุปสำหรับโหมดนี้</div>`; return; }
+      const totalSections = rich.reduce((s, c) => s + (c.sections ? c.sections.length : 0), 0);
+      body.innerHTML = `
+        <div class="k-toolbar">
+          <input class="text" id="kSearch" placeholder="🔍 ค้นหาเนื้อหา/คำศัพท์ในบทนี้..." />
+          <span class="muted k-count">${rich.length} บท • ${totalSections} หัวข้อ</span>
+        </div>
+        <div id="kChapters">` +
+        rich.map((chp, i) => `
+          <div class="accordion kchap" data-i="${i}">
+            <button><span>${esc(chp.chapter)}</span><span class="caret">▶</span></button>
+            <div class="content">
+              ${(chp.sections || []).map((sec) => `
+                <div class="ksection" data-text="${esc(((sec.h || "") + " " + (sec.p || []).join(" ") + " " + (sec.list || []).join(" ")).toLowerCase())}">
+                  <h4 class="ksection-h">${esc(sec.h)}</h4>
+                  ${(sec.p || []).map((t) => `<p class="kpar">${esc(t)}</p>`).join("")}
+                  ${sec.list ? `<ul class="klist">${sec.list.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+                </div>`).join("")}
+            </div>
+          </div>`).join("") + `</div>`;
+      $$(".kchap", body).forEach((acc) => {
         $("button", acc).onclick = () => acc.classList.toggle("open");
       });
-      const first = $(".accordion", body); if (first) first.classList.add("open");
+      const first = $(".kchap", body); if (first) first.classList.add("open");
+
+      const search = $("#kSearch", body);
+      search.addEventListener("input", () => {
+        const q = search.value.trim().toLowerCase();
+        $$(".kchap", body).forEach((acc) => {
+          let visible = 0;
+          $$(".ksection", acc).forEach((sec) => {
+            const show = !q || (sec.dataset.text || "").includes(q);
+            sec.style.display = show ? "" : "none";
+            if (show) visible++;
+          });
+          acc.style.display = visible ? "" : "none";
+          if (q && visible) acc.classList.add("open");
+        });
+      });
     }
   }
 

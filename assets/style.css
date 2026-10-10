@@ -210,6 +210,18 @@ button.btn.danger { border-color: var(--danger); color: var(--danger); }
 .accordion > button .caret { margin-left: auto; color: var(--muted); transition: .2s; }
 .accordion.open > button .caret { transform: rotate(90deg); }
 .accordion .content { display: none; padding: 0 18px 18px; color: #d7ebe2; line-height: 1.7; }
+
+/* Knowledge book */
+.k-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.k-toolbar .text { flex: 1; min-width: 200px; }
+.k-count { font-size: 13px; white-space: nowrap; }
+.ksection { padding: 14px 0 4px; border-top: 1px dashed var(--line); }
+.ksection:first-child { border-top: 0; padding-top: 4px; }
+.ksection-h { color: var(--accent); margin: 6px 0 8px; font-size: 16px; }
+.kpar { margin: 0 0 12px; line-height: 1.85; color: #dcefe6; text-align: justify; }
+.klist { margin: 0 0 14px; padding-left: 22px; }
+.klist li { margin: 6px 0; line-height: 1.7; }
+.kchap > button { font-weight: 600; }
 .accordion.open .content { display: block; }
 .accordion .content ul { margin: 8px 0; padding-left: 20px; }
 .accordion .content li { margin: 6px 0; }
