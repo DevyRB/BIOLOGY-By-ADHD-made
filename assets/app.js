@@ -474,12 +474,18 @@
         </div>
         <div class="row" style="margin-top:16px">
           <button class="btn primary" id="next">${S.idx + 1 < total ? "ข้อต่อไป →" : "ดูสรุปผล 🏁"}</button>
+          ${window.AITutor ? `<button class="btn ai-explain" id="aiExplain">🤖 ให้ AI อธิบายข้อนี้</button>` : ""}
         </div>`;
       $("#next", main).onclick = () => {
         S.idx++;
         if (S.idx >= S.items.length) finish();
         else { persistSession(); renderQ($("#app")); }
       };
+      const aiBtn = $("#aiExplain", main);
+      if (aiBtn && window.AITutor) aiBtn.onclick = () => window.AITutor.explainQuestion({
+        concept: it.q.concept, stem: it.q.stem, question: it.q.q,
+        choices: it.choices, answerIndex: it.answer, picked: it.picked, explanation: it.q.explanation,
+      });
     }
 
     const keyMap = { "1": 0, "2": 1, "3": 2, "4": 3, "ก": 0, "ข": 1, "ค": 2, "ง": 3 };
