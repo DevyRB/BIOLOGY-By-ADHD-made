@@ -56,17 +56,49 @@
   /* ================= Storage ================= */
   const KEY = "bio_quiz_v1";
   let Store = loadStore();
-  function defaultStore() { return { version: 1, user: null, modes: {}, flash: {} }; }
+  function defaultStore() { return { version: 1, user: null, modes: {}, flash: {}, session: null, last: null }; }
   function loadStore() {
     try {
       const raw = localStorage.getItem(KEY);
       if (!raw) return defaultStore();
       const s = JSON.parse(raw);
       s.user = s.user || null; s.modes = s.modes || {}; s.flash = s.flash || {};
+      s.session = s.session || null; s.last = s.last || null;
       return s;
     } catch (e) { return defaultStore(); }
   }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(Store)); } catch (e) {} };
+
+  /* ---- Session (save/resume quiz) ---- */
+  function findQuestion(id) { return allQuestions().find((q) => q.id === id) || null; }
+  function persistSession() {
+    if (!S) { Store.session = null; save(); return; }
+    Store.session = {
+      modeId: S.modeId, count: S.count, idx: S.idx, correct: S.correct, at: Date.now(),
+      items: S.items.map((it) => ({ id: it.id, order: it.order, picked: it.picked, correct: it.correct })),
+    };
+    Store.last = { modeId: S.modeId, at: Date.now() };
+    save();
+  }
+  function clearSession() { Store.session = null; save(); }
+  function restoreSession(saved) {
+    if (!saved || !saved.items || !saved.items.length) return null;
+    const items = [];
+    for (const si of saved.items) {
+      const q = findQuestion(si.id);
+      if (!q) return null;
+      const order = (si.order && si.order.length === q.choices.length) ? si.order : q.choices.map((_, i) => i);
+      items.push({
+        id: si.id, q, order, choices: order.map((i) => q.choices[i]),
+        answer: order.indexOf(q.answer), picked: si.picked, correct: si.correct,
+      });
+    }
+    let idx = Math.min(Math.max(saved.idx | 0, 0), items.length - 1);
+    let correct = saved.correct | 0;
+    if (items.every((it) => it.picked !== null)) { idx = items.length - 1; correct = items.filter((it) => it.correct).length; }
+    return { modeId: saved.modeId, count: saved.count, items, idx, correct, restored: true };
+  }
+  const sessionFor = (mid) => (Store.session && Store.session.modeId === mid ? Store.session : null);
   const modeStat = (mid) => {
     Store.modes[mid] = Store.modes[mid] || { plays: 0, best: 0, last: 0, lastAt: 0, questions: {}, chapters: {} };
     return Store.modes[mid];
@@ -163,7 +195,31 @@
   function renderHome(main) {
     const wrap = document.createElement("div");
     const greet = Store.user ? `ยินดีต้อนรับกลับ ${esc(Store.user.name)}! 👋` : "ยินดีต้อนรับ! 👋";
-    wrap.innerHTML = `
+    let banner = "";
+    const sess = Store.session;
+    if (sess && sess.items && sess.items.length) {
+      const sinfo = modeInfo(sess.modeId);
+      const stitle = sinfo ? sinfo.title : sess.modeId;
+      const prog = Math.min(sess.idx + 1, sess.items.length);
+      const answered = sess.items.filter((i) => i.picked !== null).length;
+      banner = `
+      <div class="card resume-banner" style="margin-bottom:20px;border-color:var(--accent)">
+        <div class="row" style="align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3 class="section-title" style="font-size:18px;margin:0">⏯ มีควิซค้างอยู่</h3>
+            <p class="muted" style="font-size:13px;margin:6px 0 0">${esc(stitle)} • ข้อ ${prog}/${sess.items.length} • ตอบแล้ว ${answered} ข้อ</p>
+          </div>
+          <div class="row">
+            <button class="btn primary" id="resumeBtn">ทำต่อ</button>
+            <button class="btn" id="discardBtn">เริ่มใหม่</button>
+          </div>
+        </div>
+      </div>`;
+    } else if (Store.last && Store.last.modeId) {
+      const linfo = modeInfo(Store.last.modeId);
+      if (linfo) banner = `<p class="section-sub">🕘 เล่นล่าสุด: <b>${esc(linfo.title)}</b></p>`;
+    }
+    wrap.innerHTML = `${banner}
       <div class="card" style="margin-bottom:20px">
         <h2 class="section-title">${greet}</h2>
         <p class="section-sub">เลือกโหมดที่ต้องการ ระบบจะสุ่มข้อและสลับตัวเลือกใหม่ทุกครั้ง และจดจำความคืบหน้าของคุณไว้</p>
@@ -179,6 +235,13 @@
       <h3 class="section-title" style="margin-top:26px">โหมดพิเศษ</h3>
       <div class="grid" id="specialGrid"></div>`;
     main.appendChild(wrap);
+
+    if ($("#resumeBtn", wrap)) {
+      $("#resumeBtn", wrap).onclick = () => route("quiz", { modeId: sess.modeId, count: sess.count || 0, resume: true });
+      $("#discardBtn", wrap).onclick = () => {
+        if (confirm("ลบควิซที่ค้างไว้และเริ่มใหม่?")) { clearSession(); route("mode", sess.modeId); }
+      };
+    }
 
     const grid = $("#modeGrid", wrap);
     MODE_ORDER.forEach((mid) => {
@@ -232,11 +295,25 @@
         }).join("") + `</div></div>`;
     }
     const empty = info.count === 0;
+    const sess = sessionFor(id);
+    let resumeRow = "";
+    if (sess && sess.items && sess.items.length) {
+      const prog = Math.min(sess.idx + 1, sess.items.length);
+      const answered = sess.items.filter((i) => i.picked !== null).length;
+      resumeRow = `<div class="card resume-banner" style="margin-top:16px;border-color:var(--accent)">
+        <div class="row" style="align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div><b>⏯ ทำค้างไว้</b><div class="muted" style="font-size:13px">ข้อ ${prog}/${sess.items.length} • ตอบแล้ว ${answered} ข้อ</div></div>
+          <div class="row"><button class="btn primary" id="resumeBtn">ทำต่อ</button>
+          <button class="btn" id="restartBtn">เริ่มใหม่</button></div>
+        </div>
+      </div>`;
+    }
     wrap.innerHTML = `
       <div style="font-size:40px">${info.icon}</div>
       <h2 class="section-title">${esc(info.title)}</h2>
       <p class="section-sub">${info.count} ข้อ${info.chapters ? ` • ${info.chapters.length} บท` : " • รวมหลายบท"}${Store.modes[id] ? ` • คะแนนดีที่สุด ${best}%` : ""}</p>
       ${chap}
+      ${resumeRow}
       ${empty
         ? `<p class="muted" style="margin-top:18px">ยังไม่มีข้อในโหมดนี้ — ไปทำโหมดอื่นเพื่อสะสมข้อที่ตอบผิดก่อนนะครับ</p>
            <div class="row" style="margin-top:14px"><button class="btn" id="back">← กลับ</button></div>`
@@ -255,8 +332,11 @@
     if (empty) { $("#back", wrap).onclick = () => route("home"); return; }
     $("#start", wrap).onclick = () => {
       const n = parseInt($("#qCount", wrap).value, 10);
+      if (sess) { if (!confirm("มีควิซค้างอยู่ ต้องการเริ่มใหม่ทับของเดิมหรือไม่?")) { route("quiz", { modeId: id, count: sess.count || n, resume: true }); return; } clearSession(); S = null; }
       route("quiz", { modeId: id, count: n });
     };
+    if ($("#resumeBtn", wrap)) $("#resumeBtn", wrap).onclick = () => route("quiz", { modeId: id, count: sess.count || 0, resume: true });
+    if ($("#restartBtn", wrap)) $("#restartBtn", wrap).onclick = () => { clearSession(); S = null; route("quiz", { modeId: id, count: sess.count || 0 }); };
     if ($("#flash", wrap)) $("#flash", wrap).onclick = () => route("flash", id);
     if ($("#know", wrap)) $("#know", wrap).onclick = () => route("knowledge", id);
   }
@@ -273,13 +353,20 @@
     if (count > 0 && count < pool.length) pool = pool.slice(0, count);
     const items = pool.map((q) => {
       const order = shuffle(q.choices.map((_, i) => i));
-      return { q, choices: order.map((i) => q.choices[i]), answer: order.indexOf(q.answer), picked: null, correct: null };
+      return { id: q.id, q, order, choices: order.map((i) => q.choices[i]), answer: order.indexOf(q.answer), picked: null, correct: null };
     });
-    return { modeId, items, idx: 0, correct: 0 };
+    return { modeId, count, items, idx: 0, correct: 0 };
   }
 
   function renderQuiz(main, params) {
-    if (!S || S.modeId !== params.modeId) S = buildSession(params.modeId, params.count || 0);
+    if (params && params.resume) {
+      const r = restoreSession(Store.session);
+      if (r) S = r;
+    }
+    if (!S || S.modeId !== params.modeId) {
+      S = buildSession(params.modeId, params.count || 0);
+      persistSession();
+    }
     if (!S.items.length) return route("mode", params.modeId);
     renderQ(main);
   }
@@ -303,7 +390,11 @@
         <div class="choices" id="choices"></div>
         <div id="fb"></div>
       </div>`;
-    $("#quit", main).onclick = () => { if (confirm("ออกจากการทำควิซ?")) { S = null; route("home"); } };
+    $("#quit", main).onclick = () => {
+      if (confirm("ออกจากการทำควิซ? ความคืบหน้าจะถูกบันทึกไว้ ทำต่อได้ภายหลัง")) {
+        persistSession(); S = null; route("home");
+      }
+    };
 
     const cbox = $("#choices", main);
     it.choices.forEach((t, i) => {
@@ -314,16 +405,22 @@
       cbox.appendChild(b);
     });
 
+    if (it.picked !== null) showResult();
+
     function pick(i) {
       if (it.picked !== null) return;
       it.picked = i;
       it.correct = i === it.answer;
       if (it.correct) S.correct++;
-      recordAnswer(it.q, it.correct); save();
+      recordAnswer(it.q, it.correct); persistSession();
+      showResult();
+    }
+
+    function showResult() {
       $$(".choice", cbox).forEach((b, bi) => {
         b.classList.add("locked");
         if (bi === it.answer) b.classList.add("correct");
-        if (bi === i && !it.correct) b.classList.add("wrong");
+        if (bi === it.picked && !it.correct) b.classList.add("wrong");
       });
       const fb = $("#fb", main);
       fb.innerHTML = `
@@ -337,7 +434,7 @@
       $("#next", main).onclick = () => {
         S.idx++;
         if (S.idx >= S.items.length) finish();
-        else renderQ($("#app"));
+        else { persistSession(); renderQ($("#app")); }
       };
     }
   }
@@ -348,6 +445,8 @@
     const score = Math.round((correct / total) * 100);
     const ms = modeStat(S.modeId);
     ms.plays++; ms.best = Math.max(ms.best, score); ms.last = score; ms.lastAt = Date.now();
+    Store.session = null;
+    Store.last = { modeId: S.modeId, at: Date.now() };
     save();
     const modeId = S.modeId;
     S = null;
