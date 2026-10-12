@@ -426,6 +426,7 @@
       <div class="card">
         <div class="q-topic">${esc(it.q.concept || "")}</div>
         <div class="question">${esc(it.q.q)}</div>
+        ${it.q.img ? `<img class="q-img" src="${esc(it.q.img)}" alt="ประกอบโจทย์" loading="lazy" />` : ""}
         <div class="choices" id="choices"></div>
         <div class="kbd-hint muted">⌨️ กดคีย์ ก ข ค ง หรือ 1 2 3 4 เพื่อตอบ • Enter เพื่อไปข้อต่อไป</div>
         <div id="fb"></div>
@@ -437,10 +438,11 @@
     };
 
     const cbox = $("#choices", main);
+    const imgc = it.q.imgChoices || [];
     it.choices.forEach((t, i) => {
       const b = document.createElement("button");
       b.className = "choice";
-      b.innerHTML = `<span class="key">${LETTERS[i]}</span><span>${esc(t)}</span>`;
+      b.innerHTML = `<span class="key">${LETTERS[i]}</span><span>${esc(t)}${imgc[i] ? `<img class="c-img" src="${esc(imgc[i])}" alt="" loading="lazy">` : ""}</span>`;
       b.onclick = () => pick(i);
       cbox.appendChild(b);
     });
@@ -467,6 +469,7 @@
         <div class="feedback ${it.correct ? "ok" : "no"}">
           <h4>${it.correct ? "✅ ตอบถูกต้อง!" : `❌ ตอบผิด — คำตอบที่ถูกคือ "${esc(it.choices[it.answer])}"`}</h4>
           <p><span class="explain-label">คำอธิบาย: </span>${esc(it.q.explanation || "—")}</p>
+          ${it.q.explanationImg ? `<img class="q-img" src="${esc(it.q.explanationImg)}" alt="" loading="lazy">` : ""}
         </div>
         <div class="row" style="margin-top:16px">
           <button class="btn primary" id="next">${S.idx + 1 < total ? "ข้อต่อไป →" : "ดูสรุปผล 🏁"}</button>

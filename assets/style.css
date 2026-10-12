@@ -109,6 +109,8 @@ button.chapbtn:hover { border-color: var(--accent); color: var(--text); }
 .kbd-hint { font-size: 12px; margin-top: 10px; }
 @media (max-width: 640px) { .kbd-hint { display: none; } }
 .question { white-space: pre-line; }
+.q-img { max-width: 100%; height: auto; border-radius: 10px; margin: 12px 0; background: #fff; }
+.c-img { display: block; max-width: 100%; margin-top: 8px; border-radius: 8px; background: #fff; }
 
 button.btn {
   cursor: pointer;
