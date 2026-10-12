@@ -17,7 +17,7 @@
   };
   const LETTERS = ["ก", "ข", "ค", "ง", "จ", "ฉ"];
   const MODE_ORDER = ["m4-1", "m4-2", "m5-1", "m5-2", "m6-1", "m6-2"];
-  const EXAM_ORDER = ["exam-posn"];
+  const EXAM_ORDER = ["exam-posn", "exam-tbo"];
 
   /* ================= Data ================= */
   const DATA = window.BIO_DATA || {};
@@ -390,7 +390,7 @@
     pool = shuffle(pool);
     if (count > 0 && count < pool.length) pool = pool.slice(0, count);
     const items = pool.map((q) => {
-      const order = shuffle(q.choices.map((_, i) => i));
+      const order = q.fixed ? q.choices.map((_, i) => i) : shuffle(q.choices.map((_, i) => i));
       return { id: q.id, q, order, choices: order.map((i) => q.choices[i]), answer: order.indexOf(q.answer), picked: null, correct: null };
     });
     return { modeId, count, chapter: chapter == null ? null : chapter, items, idx: 0, correct: 0 };
@@ -425,10 +425,11 @@
       <div class="qbar"><i style="width:${pct}%"></i></div>
       <div class="card">
         <div class="q-topic">${esc(it.q.concept || "")}</div>
+        ${(it.q.stem || (it.q.imgs && it.q.imgs.length)) ? `<div class="q-stem"><div class="q-stem-head">📋 โจทย์/ข้อมูลประกอบ</div>${it.q.stem ? `<div class="q-stem-body">${esc(it.q.stem)}</div>` : ""}${(it.q.imgs || []).map((s) => `<img class="q-img" src="${esc(s)}" alt="ประกอบโจทย์" loading="lazy" />`).join("")}</div>` : ""}
         <div class="question">${esc(it.q.q)}</div>
         ${it.q.img ? `<img class="q-img" src="${esc(it.q.img)}" alt="ประกอบโจทย์" loading="lazy" />` : ""}
         <div class="choices" id="choices"></div>
-        <div class="kbd-hint muted">⌨️ กดคีย์ ก ข ค ง หรือ 1 2 3 4 เพื่อตอบ • Enter เพื่อไปข้อต่อไป</div>
+        <div class="kbd-hint muted">⌨️ ${it.q.fixed ? "กด ก/1 = ถูก • ข/2 = ผิด" : "กดคีย์ ก ข ค ง หรือ 1 2 3 4 เพื่อตอบ"} • Enter เพื่อไปข้อต่อไป</div>
         <div id="fb"></div>
       </div>`;
     $("#quit", main).onclick = () => {
