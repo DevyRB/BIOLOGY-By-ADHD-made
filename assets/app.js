@@ -129,9 +129,13 @@
     allQuestions().forEach((q) => {
       const ms = Store.modes[q._mode];
       const r = ms && ms.questions[q.id];
-      if (r && r.wrong > 0) out.push(q);
+      if (r && r.wrong > 0 && r.correct < r.wrong) out.push(q);
     });
     return out;
+  }
+  function resetWeak() {
+    MODE_ORDER.forEach((mid) => { if (Store.modes[mid]) Store.modes[mid].questions = {}; });
+    save();
   }
   function avgMastery() {
     const v = MODE_ORDER.map(modeMastery).filter((x) => x > 0);
@@ -228,7 +232,7 @@
           <div class="stat-pill"><span>📚</span><div><b>${allQuestions().length}</b><div class="muted" style="font-size:12px">ข้อสอบทั้งหมด</div></div></div>
           <div class="stat-pill"><span>🧩</span><div><b>${MODE_ORDER.length}</b><div class="muted" style="font-size:12px">โหมดการเรียน</div></div></div>
           <div class="stat-pill"><span>🎯</span><div><b>${avgMastery()}%</b><div class="muted" style="font-size:12px">ความชำนาญเฉลี่ย</div></div></div>
-          <div class="stat-pill"><span>🔁</span><div><b>${weakQuestions().length}</b><div class="muted" style="font-size:12px">ข้อที่เคยตอบผิด</div></div></div>
+          <div class="stat-pill"><span>🔁</span><div><b>${weakQuestions().length}</b><div class="muted" style="font-size:12px">ข้อที่ต้องทบทวน</div></div></div>
         </div>
       </div>
       <h3 class="section-title">โหมดการเรียน</h3>
@@ -261,7 +265,7 @@
     const sg = $("#specialGrid", wrap);
     [
       { id: "__special__", icon: "🎲", title: "รวมทุกเนื้อหา (สุ่ม)", desc: `สุ่มจากทุกบท รวม ${allQuestions().length} ข้อ` },
-      { id: "__review__", icon: "🔁", title: "ทบทวนข้อที่เคยตอบผิด", desc: `มี ${weakQuestions().length} ข้อที่รอทบทวน` },
+      { id: "__review__", icon: "🔁", title: "ทบทวนข้อที่ต้องทบทวน", desc: `มี ${weakQuestions().length} ข้อ • ตอบถูกจะหลุดจากรายการ` },
     ].forEach((s) => {
       const c = document.createElement("div");
       c.className = "mode-card special";
@@ -274,7 +278,7 @@
   /* ================= Mode intro ================= */
   function modeInfo(id) {
     if (id === "__special__") return { id, title: "รวมทุกเนื้อหา (สุ่ม)", icon: "🎲", chapters: null, count: allQuestions().length };
-    if (id === "__review__") return { id, title: "ทบทวนข้อที่เคยตอบผิด", icon: "🔁", chapters: null, count: weakQuestions().length };
+    if (id === "__review__") return { id, title: "ทบทวนข้อที่ต้องทบทวน", icon: "🔁", chapters: null, count: weakQuestions().length };
     const m = DATA[id]; if (!m) return null;
     return { id, title: m.title, icon: m.icon || "📘", chapters: m.chapters, count: modeCount(id) };
   }
@@ -542,10 +546,13 @@
     });
     html += `</div>`;
     const rq = weakQuestions();
-    if (weakQuestions().length) html += `<div class="row" style="margin-top:20px"><button class="btn primary" id="review">🔁 ทบทวนข้อที่ตอบผิด (${weakQuestions().length})</button></div>`;
-    html += `<div class="row" style="margin-top:22px"><button class="btn danger" id="reset">🗑 ล้างข้อมูลทั้งหมดในเครื่องนี้</button></div>`;
+    if (rq.length) html += `<div class="row" style="margin-top:20px"><button class="btn primary" id="review">🔁 ทบทวนข้อที่ตอบผิด (${rq.length})</button></div>`;
+    html += `<div class="row" style="margin-top:22px"><button class="btn" id="resetWeak">♻️ ล้างรายการข้อที่ต้องทบทวน</button><button class="btn danger" id="reset">🗑 ล้างข้อมูลทั้งหมดในเครื่องนี้</button></div>`;
     main.innerHTML = html;
     if ($("#review", main)) $("#review", main).onclick = () => route("mode", "__review__");
+    if ($("#resetWeak", main)) $("#resetWeak", main).onclick = () => {
+      if (confirm("ล้างรายการข้อที่ต้องทบทวน? (คะแนนและประวัติบทจะยังอยู่)")) { resetWeak(); route("stats"); }
+    };
     $("#reset", main).onclick = () => {
       if (confirm("ลบข้อมูลผู้ใช้ คะแนน และความคืบหน้าทั้งหมด? การกระทำนี้ย้อนกลับไม่ได้")) {
         Store = defaultStore(); save(); location.reload();
