@@ -20,7 +20,9 @@
     "เมื่อต้องใช้ศัพท์เทคนิคให้วงเล็บคำศัพท์ภาษาอังกฤษไว้ด้วย เช่น ไมโทคอนเดรีย (mitochondria) " +
     "ถ้าโจทย์ให้ข้อมูล/ภาพ/ตารางมา ให้ยึดข้อมูลนั้นในการตอบ " +
     "ถ้าไม่แน่ใจให้บอกอย่างตรงไปตรงมา ห้ามกุข้อมูล " +
-    "จัดรูปแบบคำตอบด้วยหัวข้อย่อยหรือตัวหนาให้อ่านง่าย แต่ไม่ต้องยาวเกินจำเป็น";
+    "ตอบให้กระชับและอ่านง่ายบนหน้าจอแชทขนาดเล็ก: ขึ้นต้นด้วยคำตอบสั้น ๆ แล้วค่อยขยายความ " +
+    "ใช้ย่อหน้าสั้น ๆ หรือหัวข้อย่อย (-) เท่านั้น เน้นคำสำคัญด้วยตัวหนา (**คำ**) " +
+    "หลีกเลี่ยงตาราง หัวข้อ markdown ระดับใหญ่ (###) และการเกริ่นนำที่ยืดเยื้อ ไม่ต้องทวนคำถาม";
 
   /* ---------- คีย์ ---------- */
   function getKey() {
@@ -98,20 +100,34 @@
     return h;
   }
   function renderMD(src) {
-    const lines = String(src || "").split("\n");
-    let html = "", inUl = false;
-    for (const line of lines) {
-      const li = line.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)$/);
-      if (li) {
-        if (!inUl) { html += "<ul>"; inUl = true; }
-        html += "<li>" + inline(li[1]) + "</li>";
+    const lines = String(src || "").replace(/\r/g, "").split("\n");
+    let html = "", list = null;
+    const closeList = () => { if (list) { html += "</" + list + ">"; list = null; } };
+    for (const raw of lines) {
+      const line = raw.replace(/\s+$/, "");
+      if (!line.trim()) { closeList(); continue; }
+      let m;
+      if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+        closeList();
+        const lvl = Math.min(m[1].length + 2, 6);
+        html += `<h${lvl} class="ai-h">${inline(m[2])}</h${lvl}>`;
         continue;
       }
-      if (inUl) { html += "</ul>"; inUl = false; }
-      if (!line.trim()) { html += "<br>"; continue; }
+      if (/^\s*([-*_]\s*){3,}$/.test(line)) { closeList(); html += "<hr>"; continue; }
+      if ((m = line.match(/^\s*[-*•]\s+(.*)$/))) {
+        if (list !== "ul") { closeList(); html += "<ul>"; list = "ul"; }
+        html += "<li>" + inline(m[1]) + "</li>";
+        continue;
+      }
+      if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) {
+        if (list !== "ol") { closeList(); html += "<ol>"; list = "ol"; }
+        html += "<li>" + inline(m[1]) + "</li>";
+        continue;
+      }
+      closeList();
       html += "<p>" + inline(line) + "</p>";
     }
-    if (inUl) html += "</ul>";
+    closeList();
     return html;
   }
 
