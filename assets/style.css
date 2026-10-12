@@ -108,6 +108,7 @@ button.chapbtn { cursor: pointer; border: 1px solid transparent; font: inherit; 
 button.chapbtn:hover { border-color: var(--accent); color: var(--text); }
 .kbd-hint { font-size: 12px; margin-top: 10px; }
 @media (max-width: 640px) { .kbd-hint { display: none; } }
+.question { white-space: pre-line; }
 
 button.btn {
   cursor: pointer;

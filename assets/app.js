@@ -17,6 +17,7 @@
   };
   const LETTERS = ["ก", "ข", "ค", "ง", "จ", "ฉ"];
   const MODE_ORDER = ["m4-1", "m4-2", "m5-1", "m5-2", "m6-1", "m6-2"];
+  const EXAM_ORDER = ["exam-posn"];
 
   /* ================= Data ================= */
   const DATA = window.BIO_DATA || {};
@@ -24,7 +25,7 @@
   const QOVERRIDE = window.BIO_QUESTIONS || {};
 
   function ensureIds() {
-    MODE_ORDER.forEach((mid) => {
+    MODE_ORDER.concat(EXAM_ORDER).forEach((mid) => {
       const mode = DATA[mid];
       if (!mode) return;
       mode.id = mid;
@@ -273,6 +274,28 @@
       c.onclick = () => route("mode", s.id);
       sg.appendChild(c);
     });
+
+    const examIds = EXAM_ORDER.filter((id) => DATA[id]);
+    if (examIds.length) {
+      const title = document.createElement("h3");
+      title.className = "section-title";
+      title.style.marginTop = "26px";
+      title.textContent = "🏆 สนามแข่งขัน";
+      wrap.appendChild(title);
+      const eg = document.createElement("div");
+      eg.className = "grid";
+      examIds.forEach((id) => {
+        const m = DATA[id];
+        const card = document.createElement("div");
+        card.className = "mode-card";
+        card.innerHTML = `<div class="icon">${m.icon || "🏆"}</div><h3>${esc(m.title)}</h3>
+          <p>${m.chapters.length} ชุด • ${modeCount(id)} ข้อ</p>
+          ${m.sub ? `<div class="muted" style="font-size:12px;margin-top:6px">${esc(m.sub)}</div>` : ""}`;
+        card.onclick = () => route("mode", id);
+        eg.appendChild(card);
+      });
+      wrap.appendChild(eg);
+    }
   }
 
   /* ================= Mode intro ================= */
@@ -331,7 +354,7 @@
                <option value="0">ทั้งหมด (${info.count} ข้อ)</option>
              </select>
              <button class="btn primary" id="start">▶ เริ่มทำควิซ</button>
-             ${id.startsWith("__") ? "" : `<button class="btn" id="flash">🃏 แฟลชการ์ด</button><button class="btn" id="know">📖 คลังความรู้</button>`}
+             ${(id.startsWith("__") || EXAM_ORDER.includes(id)) ? "" : `<button class="btn" id="flash">🃏 แฟลชการ์ด</button><button class="btn" id="know">📖 คลังความรู้</button>`}
            </div>`}`;
     main.appendChild(wrap);
     if (empty) { $("#back", wrap).onclick = () => route("home"); return; }
