@@ -74,7 +74,7 @@
   function persistSession() {
     if (!S) { Store.session = null; save(); return; }
     Store.session = {
-      modeId: S.modeId, count: S.count, idx: S.idx, correct: S.correct, at: Date.now(),
+      modeId: S.modeId, count: S.count, chapter: S.chapter, idx: S.idx, correct: S.correct, at: Date.now(),
       items: S.items.map((it) => ({ id: it.id, order: it.order, picked: it.picked, correct: it.correct })),
     };
     Store.last = { modeId: S.modeId, at: Date.now() };
@@ -96,7 +96,7 @@
     let idx = Math.min(Math.max(saved.idx | 0, 0), items.length - 1);
     let correct = saved.correct | 0;
     if (items.every((it) => it.picked !== null)) { idx = items.length - 1; correct = items.filter((it) => it.correct).length; }
-    return { modeId: saved.modeId, count: saved.count, items, idx, correct, restored: true };
+    return { modeId: saved.modeId, count: saved.count, chapter: saved.chapter, items, idx, correct, restored: true };
   }
   const sessionFor = (mid) => (Store.session && Store.session.modeId === mid ? Store.session : null);
   const modeStat = (mid) => {
@@ -183,6 +183,7 @@
   let current = "home";
   function route(view, params) {
     current = view;
+    if (quizKeyHandler) { document.removeEventListener("keydown", quizKeyHandler); quizKeyHandler = null; }
     $$(".navbtn").forEach((b) => b.classList.toggle("active", b.dataset.nav === view));
     window.scrollTo(0, 0);
     const main = $("#app");
@@ -287,11 +288,11 @@
     wrap.className = "card";
     let chap = "";
     if (info.chapters) {
-      chap = `<div style="margin-top:18px"><b>บทที่ครอบคลุม</b><div class="row" style="margin-top:10px">` +
+      chap = `<div style="margin-top:18px"><b>บทที่ครอบคลุม</b><p class="muted" style="font-size:13px;margin:6px 0 0">แตะบทเพื่อทำควิซเฉพาะบทนั้น</p><div class="row" style="margin-top:10px">` +
         info.chapters.map((ch, ci) => {
           const a = chapterAcc(id, ci);
           const tag = a === null ? "" : ` <b style="color:${accColor(a)}">${Math.round(a * 100)}%</b>`;
-          return `<span class="badge">${esc(ch.title)}${tag}</span>`;
+          return `<button class="badge chapbtn" data-ci="${ci}">${esc(ch.title)}${tag}</button>`;
         }).join("") + `</div></div>`;
     }
     const empty = info.count === 0;
@@ -330,6 +331,13 @@
            </div>`}`;
     main.appendChild(wrap);
     if (empty) { $("#back", wrap).onclick = () => route("home"); return; }
+    $$(".chapbtn", wrap).forEach((b) => {
+      b.onclick = () => {
+        const ci = parseInt(b.dataset.ci, 10);
+        if (sess) { if (!confirm("มีควิซค้างอยู่ ต้องการเริ่มใหม่ทับของเดิมหรือไม่?")) { route("quiz", { modeId: id, count: sess.count || 0, resume: true }); return; } clearSession(); S = null; }
+        route("quiz", { modeId: id, count: 0, chapter: ci });
+      };
+    });
     $("#start", wrap).onclick = () => {
       const n = parseInt($("#qCount", wrap).value, 10);
       if (sess) { if (!confirm("มีควิซค้างอยู่ ต้องการเริ่มใหม่ทับของเดิมหรือไม่?")) { route("quiz", { modeId: id, count: sess.count || n, resume: true }); return; } clearSession(); S = null; }
@@ -343,11 +351,14 @@
 
   /* ================= Quiz ================= */
   let S = null;
+  let quizKeyHandler = null;
 
-  function buildSession(modeId, count) {
+
+  function buildSession(modeId, count, chapter) {
     let pool;
     if (modeId === "__special__") pool = allQuestions();
     else if (modeId === "__review__") pool = weakQuestions();
+    else if (chapter != null && DATA[modeId].chapters[chapter]) pool = DATA[modeId].chapters[chapter].questions;
     else pool = DATA[modeId].chapters.flatMap((c) => c.questions);
     pool = shuffle(pool);
     if (count > 0 && count < pool.length) pool = pool.slice(0, count);
@@ -355,7 +366,7 @@
       const order = shuffle(q.choices.map((_, i) => i));
       return { id: q.id, q, order, choices: order.map((i) => q.choices[i]), answer: order.indexOf(q.answer), picked: null, correct: null };
     });
-    return { modeId, count, items, idx: 0, correct: 0 };
+    return { modeId, count, chapter: chapter == null ? null : chapter, items, idx: 0, correct: 0 };
   }
 
   function renderQuiz(main, params) {
@@ -363,8 +374,8 @@
       const r = restoreSession(Store.session);
       if (r) S = r;
     }
-    if (!S || S.modeId !== params.modeId) {
-      S = buildSession(params.modeId, params.count || 0);
+    if (!S || S.modeId !== params.modeId || (params.chapter != null && S.chapter !== params.chapter)) {
+      S = buildSession(params.modeId, params.count || 0, params.chapter);
       persistSession();
     }
     if (!S.items.length) return route("mode", params.modeId);
@@ -372,6 +383,7 @@
   }
 
   function renderQ(main) {
+    if (quizKeyHandler) { document.removeEventListener("keydown", quizKeyHandler); quizKeyHandler = null; }
     const it = S.items[S.idx];
     const total = S.items.length;
     const pct = Math.round((S.idx / total) * 100);
@@ -388,6 +400,7 @@
         <div class="q-topic">${esc(it.q.concept || "")}</div>
         <div class="question">${esc(it.q.q)}</div>
         <div class="choices" id="choices"></div>
+        <div class="kbd-hint muted">⌨️ กดคีย์ ก ข ค ง หรือ 1 2 3 4 เพื่อตอบ • Enter เพื่อไปข้อต่อไป</div>
         <div id="fb"></div>
       </div>`;
     $("#quit", main).onclick = () => {
@@ -437,6 +450,21 @@
         else { persistSession(); renderQ($("#app")); }
       };
     }
+
+    const keyMap = { "1": 0, "2": 1, "3": 2, "4": 3, "ก": 0, "ข": 1, "ค": 2, "ง": 3 };
+    quizKeyHandler = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const tag = e.target && e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (it.picked === null) {
+        const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        if (k in keyMap) { e.preventDefault(); pick(keyMap[k]); }
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const nb = $("#next", main); if (nb) nb.click();
+      }
+    };
+    document.addEventListener("keydown", quizKeyHandler);
   }
 
   function finish() {
