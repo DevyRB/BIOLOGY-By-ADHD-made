@@ -86,7 +86,7 @@
   /* ================= Storage ================= */
   const KEY = "bio_quiz_v1";
   let Store = loadStore();
-  function defaultStore() { return { version: 1, user: null, modes: {}, flash: {}, session: null, last: null }; }
+  function defaultStore() { return { version: 1, user: null, modes: {}, flash: {}, session: null, last: null, xp: 0, streak: { last: "", days: 0 }, badges: {} }; }
   function loadStore() {
     try {
       const raw = localStorage.getItem(KEY);
@@ -94,6 +94,9 @@
       const s = JSON.parse(raw);
       s.user = s.user || null; s.modes = s.modes || {}; s.flash = s.flash || {};
       s.session = s.session || null; s.last = s.last || null;
+      if (typeof s.xp !== "number") s.xp = 0;
+      if (!s.streak || typeof s.streak !== "object") s.streak = { last: "", days: 0 };
+      if (!s.badges || typeof s.badges !== "object") s.badges = {};
       return s;
     } catch (e) { return defaultStore(); }
   }
@@ -126,7 +129,7 @@
     let idx = Math.min(Math.max(saved.idx | 0, 0), items.length - 1);
     let correct = saved.correct | 0;
     if (items.every((it) => it.picked !== null)) { idx = items.length - 1; correct = items.filter((it) => it.correct).length; }
-    return { modeId: saved.modeId, count: saved.count, chapter: saved.chapter, items, idx, correct, restored: true };
+    return { modeId: saved.modeId, count: saved.count, chapter: saved.chapter, items, idx, correct, restored: true, combo: 0, bestCombo: 0 };
   }
   const sessionFor = (mid) => (Store.session && Store.session.modeId === mid ? Store.session : null);
   const modeStat = (mid) => {
@@ -173,6 +176,131 @@
   }
   const hasData = () => MODE_ORDER.some((mid) => Store.modes[mid] && Store.modes[mid].plays > 0);
   const accColor = (a) => (a >= 0.7 ? "var(--ok)" : a >= 0.4 ? "var(--warn)" : "var(--danger)");
+
+  /* ================= Engagement: XP / Level / Streak / Badges / FX =================
+     ออกแบบเพื่อกระตุ้นโดปามีน: รางวัลทันที, เลเวล, คอมโบ, เป้าหมายเล็ก ๆ, ความหลากหลาย
+     เพื่อลดความเบื่อสำหรับผู้ใช้ที่สมาธิสั้น (ADHD) */
+  const PRAISE = ["เยี่ยม! 🔥", "เก่งมาก ⚡", "แม่นสุด ๆ 🌟", "โดนเลย 🎯", "สมองแล่น 🧠", "สุดยอด ✨", "เป๊ะ! 💚", "ลื่นไหล 🚀", "โอ้โห! 💥"];
+  const SUPPORT = ["ไม่เป็นไร ลองอีกนิด 💪", "เกือบแล้ว! 🌱", "ข้อนี้หลอกนิดนึง 🙂", "เก็บไว้ทบทวนนะ 📌", "ผิดก็ได้เรียน 🌿", "สู้ ๆ ข้อต่อไป 🌈"];
+  const pick1 = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  function levelInfo(xp) {
+    let level = 1, cur = xp || 0, need = 80;
+    while (cur >= need) { cur -= need; level++; need = Math.round(need * 1.25); }
+    return { level, cur, need };
+  }
+  function todayStr() { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+  function yesterdayStr() { const y = new Date(); y.setDate(y.getDate() - 1); return y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate(); }
+
+  function renderXpChip(animate) {
+    const el = document.getElementById("xpChip");
+    if (!el) return;
+    const li = levelInfo(Store.xp || 0);
+    const pct = Math.round((li.cur / li.need) * 100);
+    el.innerHTML = `<span class="xp-lv">Lv.${li.level}</span>` +
+      `<span class="xp-bar" title="${li.cur}/${li.need} XP"><i style="width:${pct}%"></i></span>` +
+      `<span class="xp-fire" title="เล่นต่อเนื่อง ${Store.streak.days} วัน">🔥 ${Store.streak.days}</span>`;
+    el.onclick = () => route("stats");
+    if (animate) { el.classList.remove("pump"); void el.offsetWidth; el.classList.add("pump"); }
+  }
+
+  function touchStreak() {
+    const t = todayStr();
+    const s = Store.streak;
+    if (s.last === t) return false;
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const ys = y.getFullYear() + "-" + (y.getMonth() + 1) + "-" + y.getDate();
+    s.days = s.last === ys ? (s.days + 1) : 1;
+    s.last = t;
+    save();
+    return true;
+  }
+
+  function xpFloat(n) {
+    const chip = document.getElementById("xpChip");
+    if (!chip) return;
+    const f = document.createElement("span");
+    f.className = "xp-float";
+    f.textContent = (n > 0 ? "+" : "") + n + " XP";
+    chip.appendChild(f);
+    setTimeout(() => f.remove(), 950);
+  }
+
+  function addXP(n) {
+    if (!n) return;
+    const before = levelInfo(Store.xp || 0).level;
+    Store.xp = Math.max(0, (Store.xp || 0) + n);
+    save();
+    renderXpChip(true);
+    xpFloat(n);
+    if (levelInfo(Store.xp).level > before) levelUp(levelInfo(Store.xp).level);
+  }
+
+  function levelUp(level) {
+    badgeToast("⭐", "เลเวลอัป!", "ถึงเลเวล " + level + " แล้ว เก่งมาก!");
+    celebrate(55);
+    if (level >= 5) unlockBadge("level5");
+  }
+
+  const BADGES = [
+    { id: "first", icon: "🎬", name: "ก้าวแรก", desc: "ทำควิซจบครั้งแรก" },
+    { id: "combo5", icon: "🔥", name: "ไฟลุก", desc: "ตอบถูกติดกัน 5 ข้อ" },
+    { id: "combo10", icon: "⚡", name: "สายฟ้าฟาด", desc: "ตอบถูกติดกัน 10 ข้อ" },
+    { id: "perfect", icon: "💯", name: "เพอร์เฟกต์", desc: "ทำได้ 100% ในหนึ่งรอบ" },
+    { id: "streak3", icon: "📅", name: "ขยันจริง", desc: "เล่นต่อเนื่อง 3 วัน" },
+    { id: "streak7", icon: "🗓️", name: "เจ็ดวันไม่มีหยุด", desc: "เล่นต่อเนื่อง 7 วัน" },
+    { id: "explorer", icon: "🧭", name: "นักสำรวจ", desc: "เล่นครบทั้ง 6 โหมด" },
+    { id: "aifriend", icon: "🤖", name: "คู่หู AI", desc: "ใช้ผู้ช่วย AI อธิบาย" },
+    { id: "level5", icon: "🏅", name: "ตัวท็อป", desc: "ถึงเลเวล 5" },
+  ];
+  function unlockBadge(id) {
+    if (!Store.badges || Store.badges[id]) return false;
+    Store.badges[id] = true; save();
+    const b = BADGES.find((x) => x.id === id);
+    if (b) badgeToast(b.icon, "ปลดล็อก: " + b.name, b.desc);
+    celebrate(45);
+    return true;
+  }
+  function checkBadges() {
+    if (Store.streak.days >= 3) unlockBadge("streak3");
+    if (Store.streak.days >= 7) unlockBadge("streak7");
+    const played = MODE_ORDER.filter((mid) => Store.modes[mid] && Store.modes[mid].plays > 0);
+    if (played.length >= MODE_ORDER.length) unlockBadge("explorer");
+  }
+
+  function badgeToast(icon, title, desc) {
+    let host = document.getElementById("toastHost");
+    if (!host) { host = document.createElement("div"); host.id = "toastHost"; host.className = "toast-host"; document.body.appendChild(host); }
+    const t = document.createElement("div");
+    t.className = "toast";
+    t.innerHTML = `<span class="toast-ic">${icon}</span><div><b>${esc(title)}</b>${desc ? `<small>${esc(desc)}</small>` : ""}</div>`;
+    host.appendChild(t);
+    raf(() => t.classList.add("in"));
+    setTimeout(() => { t.classList.remove("in"); setTimeout(() => t.remove(), 320); }, 3400);
+  }
+
+  function celebrate(power) {
+    const glyphs = ["🧬", "⚡", "🌟", "💚", "✨", "🔬", "🧪", "💫", "🎉"];
+    let host = document.getElementById("fxHost");
+    if (!host) { host = document.createElement("div"); host.id = "fxHost"; host.className = "fx-host"; document.body.appendChild(host); }
+    const n = Math.min(power || 24, 44);
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement("span");
+      p.className = "fx";
+      p.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 70 + Math.random() * 240;
+      p.style.left = "50%"; p.style.top = "46%";
+      p.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+      p.style.setProperty("--dy", (Math.sin(ang) * dist - 140) + "px");
+      p.style.fontSize = (14 + Math.random() * 20) + "px";
+      p.style.animationDelay = (Math.random() * 0.16) + "s";
+      host.appendChild(p);
+      setTimeout(() => p.remove(), 1500);
+    }
+  }
+  const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const raf = (fn) => { try { return (window.requestAnimationFrame || ((cb) => setTimeout(cb, 16)))(fn); } catch (e) { return setTimeout(fn, 16); } };
 
   /* ================= Profile ================= */
   function renderProfileChip() {
@@ -257,9 +385,33 @@
       const linfo = modeInfo(Store.last.modeId);
       if (linfo) banner = `<p class="section-sub">🕘 เล่นล่าสุด: <b>${esc(linfo.title)}</b></p>`;
     }
-    wrap.innerHTML = `${banner}
+    const li = levelInfo(Store.xp || 0);
+    const lvlPct = Math.round((li.cur / li.need) * 100);
+    const badgeCount = BADGES.filter((b) => Store.badges[b.id]).length;
+    const weakN = weakQuestions().length;
+    const hero = `
+      <div class="card hero">
+        <div class="hero-top">
+          <div class="lvl-ring" style="--p:${lvlPct}"><div><div class="lvl-num">Lv.${li.level}</div><div class="lvl-xp">${li.cur}/${li.need}</div></div></div>
+          <div class="hero-meta">
+            <h2 class="section-title" style="margin:0">${greet}</h2>
+            <p class="section-sub" style="margin:6px 0 10px">เก็บ XP ให้ครบเพื่ออัปเลเวล แล้วเล่นต่อเนื่องเพื่อรักษาไฟ 🔥 ไว้</p>
+            <div class="hero-chips">
+              <span class="chip">⭐ ${Store.xp || 0} XP</span>
+              <span class="chip">🔥 ${Store.streak.days} วันติด</span>
+              <span class="chip">🥇 ${badgeCount}/${BADGES.length} เหรียญ</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="btn primary" id="quick10">⚡ เล่นเร็ว 10 ข้อ</button>
+          <button class="btn" id="daily">🔥 ท้าทายวันนี้</button>
+          <button class="btn" id="quickWeak">🧠 ทบทวนข้อที่ผิด${weakN ? ` (${weakN})` : ""}</button>
+        </div>
+      </div>`;
+    wrap.innerHTML = `${hero}${banner}
       <div class="card" style="margin-bottom:20px">
-        <h2 class="section-title">${greet}</h2>
+        <h3 class="section-title" style="font-size:16px">📊 ภาพรวมของคุณ</h3>
         <p class="section-sub">เลือกโหมดที่ต้องการ ระบบจะสุ่มข้อและสลับตัวเลือกใหม่ทุกครั้ง และจดจำความคืบหน้าของคุณไว้</p>
         <div class="row">
           <div class="stat-pill"><span>📚</span><div><b>${allQuestions().length}</b><div class="muted" style="font-size:12px">ข้อสอบทั้งหมด</div></div></div>
@@ -280,6 +432,20 @@
         if (confirm("ลบควิซที่ค้างไว้และเริ่มใหม่?")) { clearSession(); route("mode", sess.modeId); }
       };
     }
+
+    const startFresh = (modeId, count) => {
+      if (Store.session && Store.session.items && Store.session.items.length) {
+        if (!confirm("มีควิซค้างอยู่ ต้องการเริ่มใหม่ทับของเดิมหรือไม่?")) { route("quiz", { modeId: Store.session.modeId, count: Store.session.count || 0, resume: true }); return; }
+        clearSession();
+      }
+      route("quiz", { modeId, count });
+    };
+    const q10 = $("#quick10", wrap);
+    if (q10) q10.onclick = () => startFresh("__special__", 10);
+    const qd = $("#daily", wrap);
+    if (qd) qd.onclick = () => startFresh("__special__", 15);
+    const qw = $("#quickWeak", wrap);
+    if (qw) qw.onclick = () => { if (weakQuestions().length) startFresh("__review__", 0); else route("home"); };
 
     const grid = $("#modeGrid", wrap);
     MODE_ORDER.forEach((mid) => {
@@ -427,7 +593,7 @@
       const order = q.fixed ? q.choices.map((_, i) => i) : shuffle(q.choices.map((_, i) => i));
       return { id: q.id, q, order, choices: order.map((i) => q.choices[i]), answer: order.indexOf(q.answer), picked: null, correct: null };
     });
-    return { modeId, count, chapter: chapter == null ? null : chapter, items, idx: 0, correct: 0 };
+    return { modeId, count, chapter: chapter == null ? null : chapter, items, idx: 0, correct: 0, combo: 0, bestCombo: 0 };
   }
 
   function renderQuiz(main, params) {
@@ -454,6 +620,7 @@
         <span class="q-index">ข้อ ${S.idx + 1}/${total}</span>
         <span class="badge">${esc(chapterTitle(it.q))}</span>
         <span class="spacer"></span>
+        <span class="combo-badge${(S.combo || 0) >= 2 ? " on" : ""}" id="comboBadge">🔥 x${S.combo || 0}</span>
         <span class="badge">✅ ${S.correct}</span>
       </div>
       <div class="qbar"><i style="width:${pct}%"></i></div>
@@ -488,7 +655,12 @@
       if (it.picked !== null) return;
       it.picked = i;
       it.correct = i === it.answer;
-      if (it.correct) S.correct++;
+      if (it.correct) { S.correct++; S.combo = (S.combo || 0) + 1; S.bestCombo = Math.max(S.bestCombo || 0, S.combo); }
+      else { S.lastCombo = S.combo || 0; S.combo = 0; }
+      const gain = it.correct ? 10 + Math.min((S.combo - 1) * 3, 15) : 2;
+      S.lastGain = gain;
+      addXP(gain);
+      if (it.correct && S.combo >= 3) celebrate(10 + Math.min(S.combo, 8) * 3);
       recordAnswer(it.q, it.correct); persistSession();
       showResult();
     }
@@ -499,10 +671,13 @@
         if (bi === it.answer) b.classList.add("correct");
         if (bi === it.picked && !it.correct) b.classList.add("wrong");
       });
+      const praise = it.correct ? pickRandom(PRAISE) : pickRandom(SUPPORT);
+      const comboLine = it.correct && (S.combo || 0) >= 2 ? `<div class="combo-line">🔥 คอมโบ x${S.combo}! ชุดนี้เก็บเพิ่ม +${S.lastGain || 0} XP</div>` : "";
       const fb = $("#fb", main);
       fb.innerHTML = `
         <div class="feedback ${it.correct ? "ok" : "no"}">
-          <h4>${it.correct ? "✅ ตอบถูกต้อง!" : `❌ ตอบผิด — คำตอบที่ถูกคือ "${esc(it.choices[it.answer])}"`}</h4>
+          <h4>${it.correct ? "✅ ถูกต้อง! " + praise : `❌ ยังไม่ใช่ — คำตอบที่ถูกคือ "${esc(it.choices[it.answer])}"`}</h4>
+          ${comboLine}
           <p><span class="explain-label">คำอธิบาย: </span>${esc(it.q.explanation || "—")}</p>
           ${it.q.explanationImg ? `<img class="q-img" src="${esc(it.q.explanationImg)}" alt="" loading="lazy">` : ""}
         </div>
@@ -510,16 +685,23 @@
           <button class="btn primary" id="next">${S.idx + 1 < total ? "ข้อต่อไป →" : "ดูสรุปผล 🏁"}</button>
           ${window.AITutor ? `<button class="btn ai-explain" id="aiExplain">🤖 ให้ AI อธิบายข้อนี้</button>` : ""}
         </div>`;
+      const cb = $("#comboBadge", main);
+      if (cb) { cb.textContent = "🔥 x" + (S.combo || 0); cb.classList.toggle("on", (S.combo || 0) >= 2); cb.classList.remove("pump"); void cb.offsetWidth; if (it.correct && S.combo >= 2) cb.classList.add("pump"); }
+      if (it.correct && S.combo >= 5) unlockBadge("combo5");
+      if (it.correct && S.combo >= 10) unlockBadge("combo10");
       $("#next", main).onclick = () => {
         S.idx++;
         if (S.idx >= S.items.length) finish();
         else { persistSession(); renderQ($("#app")); }
       };
       const aiBtn = $("#aiExplain", main);
-      if (aiBtn && window.AITutor) aiBtn.onclick = () => window.AITutor.explainQuestion({
-        concept: it.q.concept, stem: it.q.stem, question: it.q.q,
-        choices: it.choices, answerIndex: it.answer, picked: it.picked, explanation: it.q.explanation,
-      });
+      if (aiBtn && window.AITutor) aiBtn.onclick = () => {
+        unlockBadge("aifriend");
+        window.AITutor.explainQuestion({
+          concept: it.q.concept, stem: it.q.stem, question: it.q.q,
+          choices: it.choices, answerIndex: it.answer, picked: it.picked, explanation: it.q.explanation,
+        });
+      };
     }
 
     const keyMap = { "1": 0, "2": 1, "3": 2, "4": 3, "ก": 0, "ข": 1, "ค": 2, "ง": 3 };
@@ -542,14 +724,24 @@
     const total = S.items.length;
     const correct = S.items.filter((i) => i.correct).length;
     const score = Math.round((correct / total) * 100);
-    const ms = modeStat(S.modeId);
+    const bestCombo = S.bestCombo || 0;
+    const modeId = S.modeId;
+    const ms = modeStat(modeId);
     ms.plays++; ms.best = Math.max(ms.best, score); ms.last = score; ms.lastAt = Date.now();
     Store.session = null;
-    Store.last = { modeId: S.modeId, at: Date.now() };
+    Store.last = { modeId, at: Date.now() };
     save();
-    const modeId = S.modeId;
+
+    let bonus = Math.round(score / 2);
+    if (score === 100) bonus += 50;
+    if (bestCombo >= 5) bonus += 15;
+    if (bonus) addXP(bonus);
+    unlockBadge("first");
+    if (score === 100) unlockBadge("perfect");
+    checkBadges();
+
     S = null;
-    route("result", { modeId, correct, total, score });
+    route("result", { modeId, correct, total, score, bestCombo, bonus });
   }
 
   /* ================= Result ================= */
@@ -563,13 +755,19 @@
   }
 
   function renderResult(main, p) {
-    const { modeId, correct, total, score } = p;
+    const { modeId, correct, total, score, bestCombo, bonus } = p;
     const msg = score >= 80 ? "ยอดเยี่ยมมาก! 🎉" : score >= 60 ? "ดีมาก เกือบสมบูรณ์ ✨" : score >= 40 ? "พอใช้ได้ ลองทบทวนอีกนิด 💪" : "ไม่เป็นไร ค่อย ๆ ทบทวนนะ 🌱";
+    if (score >= 80) setTimeout(() => celebrate(50), 250);
     const bars = (DATA[modeId] ? DATA[modeId].chapters.map((ch, ci) => ({ title: ch.title, acc: chapterAcc(modeId, ci) })).filter((x) => x.acc !== null).sort((a, b) => a.acc - b.acc) : []);
     main.innerHTML = `
       <div class="card center">
         <div class="badge">${esc(modeInfo(modeId) ? modeInfo(modeId).title : modeId)}</div>
         <div class="score-ring" style="--p:${score}"><div><div class="num">${score}%</div><div class="lbl">ถูก ${correct}/${total}</div></div></div>
+        <div class="reward-row">
+          ${bonus ? `<span class="reward-pill">＋${bonus} XP</span>` : ""}
+          ${bestCombo >= 2 ? `<span class="reward-pill hot">🔥 คอมโบสูงสุด x${bestCombo}</span>` : ""}
+          ${Store.streak.days >= 2 ? `<span class="reward-pill">🔥 ต่อเนื่อง ${Store.streak.days} วัน</span>` : ""}
+        </div>
         <h3 class="section-title">${msg}</h3>
         <div class="row" style="justify-content:center">
           <button class="btn primary" id="again">🔁 เล่นอีกรอบ (สุ่มใหม่)</button>
@@ -584,9 +782,33 @@
   }
 
   /* ================= Stats ================= */
+  function statsProgressCard() {
+    const li = levelInfo(Store.xp || 0);
+    const lvlPct = Math.round((li.cur / li.need) * 100);
+    const badgeCards = BADGES.map((b) => {
+      const on = !!Store.badges[b.id];
+      return `<div class="badge-card${on ? " on" : ""}" title="${esc(b.desc)}"><div class="bc-ic">${on ? b.icon : "🔒"}</div><div class="bc-name">${esc(b.name)}</div></div>`;
+    }).join("");
+    return `<div class="card" style="margin-bottom:20px">
+        <div class="hero-top">
+          <div class="lvl-ring" style="--p:${lvlPct}"><div><div class="lvl-num">Lv.${li.level}</div><div class="lvl-xp">${li.cur}/${li.need}</div></div></div>
+          <div class="hero-meta">
+            <h3 class="section-title" style="margin:0;font-size:18px">ความก้าวหน้า</h3>
+            <div class="hero-chips" style="margin-top:10px">
+              <span class="chip">⭐ ${Store.xp || 0} XP</span>
+              <span class="chip">🔥 ${Store.streak.days} วันติด</span>
+              <span class="chip">🥇 ${BADGES.filter((b) => Store.badges[b.id]).length}/${BADGES.length} เหรียญ</span>
+            </div>
+          </div>
+        </div>
+        <div class="badge-grid" style="margin-top:16px">${badgeCards}</div>
+      </div>`;
+  }
+
   function renderStats(main) {
+    const progress = statsProgressCard();
     if (!hasData()) {
-      main.innerHTML = `<div class="card center"><h2 class="section-title">ยังไม่มีสถิติ</h2><p class="section-sub">เริ่มทำควิซก่อน แล้วสถิติจุดอ่อน/จุดแข็งจะแสดงที่นี่</p><button class="btn primary" id="go">ไปเลือกโหมด</button></div>`;
+      main.innerHTML = `<h2 class="section-title">สถิติของ ${esc(Store.user ? Store.user.name : "ผู้เล่น")}</h2>${progress}<div class="card center"><h3 class="section-title">ยังไม่มีสถิติจากโหมดการเรียน</h3><p class="section-sub">เริ่มทำควิซใน "โหมดการเรียน" ก่อน แล้วสถิติจุดอ่อน/จุดแข็งจะแสดงที่นี่ (แถบความก้าวหน้าด้านบนอัปเดตทุกครั้งที่ทำควิซ)</p><button class="btn primary" id="go">ไปเลือกโหมด</button></div>`;
       $("#go", main).onclick = () => route("home");
       return;
     }
@@ -601,6 +823,7 @@
 
     let html = `<h2 class="section-title">สถิติของ ${esc(Store.user ? Store.user.name : "ผู้เล่น")}</h2>
       <p class="section-sub">วิเคราะห์จุดอ่อน-จุดแข็งจากทุกบทที่คุณเคยทำ</p>
+      ${progress}
       <div class="grid">
         <div class="card"><h3 class="section-title" style="font-size:16px">🔻 ควรทบทวนที่สุด</h3>${weakest.map((b) => barHTML(b.title, b.acc, DATA[b.mode].title)).join("")}</div>
         <div class="card"><h3 class="section-title" style="font-size:16px">🔺 จุดแข็งของคุณ</h3>${strongest.map((b) => barHTML(b.title, b.acc, DATA[b.mode].title)).join("")}</div>
@@ -1042,6 +1265,8 @@
     $$(".navbtn").forEach((b) => (b.onclick = () => route(b.dataset.nav)));
     renderProfileChip();
     ensureUser();
+    touchStreak();
+    renderXpChip();
     route("home");
   });
 })();

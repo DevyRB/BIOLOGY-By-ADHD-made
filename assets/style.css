@@ -528,3 +528,138 @@ button.ai-explain { border-color: var(--line-strong); }
 @media (max-width: 420px) {
   .grid { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   Engagement layer — XP / level / streak / combo / badges / FX
+   ========================================================================== */
+.xp-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px 6px 10px; border-radius: 999px; position: relative;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line);
+  font-size: 13px; font-weight: 600; cursor: pointer; user-select: none;
+  transition: .18s; white-space: nowrap;
+}
+.xp-chip:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.1); }
+.xp-lv { font-family: var(--font-disp); color: var(--accent); }
+.xp-bar { width: 62px; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.xp-chip .xp-bar > i { display: block; height: 100%; background: var(--grad); border-radius: 999px; transition: width .5s cubic-bezier(.22,.8,.3,1); box-shadow: 0 0 12px rgba(62, 224, 166, 0.7); }
+.xp-fire { color: var(--warn); }
+.xp-chip.pump { animation: pump-anim .5s ease; }
+@keyframes pump-anim { 0% { transform: scale(1); } 30% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.xp-float {
+  position: absolute; left: 50%; top: -6px; transform: translateX(-50%);
+  color: var(--accent); font-weight: 800; font-size: 13px; pointer-events: none;
+  animation: xpFloat .95s ease-out forwards;
+}
+@keyframes xpFloat { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, -22px); } }
+
+.combo-badge {
+  display: inline-block; padding: 4px 11px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  background: rgba(255, 255, 255, 0.06); color: var(--muted); border: 1px solid var(--line);
+  opacity: .45; transition: .2s;
+}
+.combo-badge.on {
+  opacity: 1; color: #2a0d00; border-color: transparent;
+  background: linear-gradient(135deg, #ffcf6b, #ff8a5b);
+  box-shadow: 0 0 16px rgba(255, 138, 91, 0.6);
+}
+.combo-badge.pump { animation: pump-anim .4s ease; }
+
+.combo-line {
+  display: inline-block; margin: 4px 0 8px; padding: 5px 12px; border-radius: 999px;
+  font-weight: 700; font-size: 13px; color: #2a0d00;
+  background: linear-gradient(135deg, #ffcf6b, #ff8a5b);
+  animation: pump-anim .45s ease;
+}
+
+.reward-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 6px 0 12px; }
+.reward-pill {
+  padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: rgba(62, 224, 166, 0.14); color: var(--accent); border: 1px solid rgba(62, 224, 166, 0.34);
+}
+.reward-pill.hot { background: rgba(255, 138, 91, 0.16); color: #ffcf6b; border-color: rgba(255, 138, 91, 0.4); }
+
+/* ---------- Home hero ---------- */
+.hero { margin-bottom: 20px; background:
+  radial-gradient(120% 120% at 0% 0%, rgba(62, 224, 166, 0.16), transparent 55%),
+  radial-gradient(120% 120% at 100% 0%, rgba(167, 139, 250, 0.16), transparent 55%),
+  linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)), var(--card-solid); }
+.hero-top { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.hero-meta { flex: 1; min-width: 220px; }
+.hero-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line);
+}
+.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.hero-actions .btn { animation: none; }
+
+.lvl-ring {
+  --p: 0; width: 92px; height: 92px; border-radius: 50%; flex: none;
+  display: grid; place-items: center;
+  background: conic-gradient(var(--accent) calc(var(--p) * 1%), rgba(255, 255, 255, 0.1) 0);
+  position: relative;
+}
+.lvl-ring::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--card-solid); }
+.lvl-ring > div { position: relative; z-index: 1; text-align: center; }
+.lvl-num { font-family: var(--font-disp); font-size: 20px; font-weight: 800; line-height: 1; }
+.lvl-xp { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+.hero-chips .chip { font-weight: 600; }
+.hero-actions .btn.primary { box-shadow: var(--shadow-glow); }
+
+/* ---------- Badges ---------- */
+.badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; }
+.badge-card {
+  text-align: center; padding: 12px 8px; border-radius: var(--radius-sm);
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03);
+  opacity: .5; filter: grayscale(.7); transition: .2s;
+}
+.badge-card.on {
+  opacity: 1; filter: none; border-color: rgba(62, 224, 166, 0.4);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(62, 224, 166, 0.18), transparent 70%), rgba(255, 255, 255, 0.04);
+  box-shadow: 0 10px 26px -16px rgba(62, 224, 166, 0.8);
+}
+.badge-card .bc-ic { font-size: 26px; }
+.badge-card .bc-name { font-size: 12px; margin-top: 6px; font-weight: 600; }
+
+/* ---------- Toasts ---------- */
+.toast-host {
+  position: fixed; top: 80px; right: 18px; z-index: 60;
+  display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 12px; min-width: 240px; max-width: 340px;
+  padding: 12px 16px; border-radius: var(--radius-sm);
+  background: rgba(15, 31, 25, 0.94); border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-glow); backdrop-filter: blur(12px);
+  transform: translateX(120%); opacity: 0; transition: .35s cubic-bezier(.22,.8,.3,1);
+}
+.toast.in { transform: none; opacity: 1; }
+.toast .toast-ic { font-size: 26px; }
+.toast b { display: block; font-size: 14px; }
+.toast small { color: var(--muted); font-size: 12px; }
+
+/* ---------- FX particles ---------- */
+.fx-host { position: fixed; inset: 0; pointer-events: none; z-index: 70; overflow: hidden; }
+.fx {
+  position: absolute; transform: translate(-50%, -50%);
+  animation: fxFly 1.25s cubic-bezier(.15,.7,.3,1) forwards;
+  will-change: transform, opacity;
+}
+@keyframes fxFly {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(.5) rotate(0deg); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(160deg); }
+}
+
+@media (max-width: 640px) {
+  .xp-chip .xp-bar { width: 46px; }
+  .hero-top { gap: 14px; }
+  .lvl-ring { width: 76px; height: 76px; }
+  .lvl-num { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx, .xp-float { animation: none; opacity: 0; }
+  body::before { animation: none; }
+}
