@@ -88,6 +88,62 @@
     return full;
   }
 
+  /* ---------- ยิง Groq แบบรอผลครบ (ใช้ตอนตรวจคำตอบ) ---------- */
+  async function sendOnce(messages, opts) {
+    const key = getKey();
+    if (!key) { const e = new Error("NO_KEY"); e.code = "NO_KEY"; throw e; }
+    const res = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
+      body: JSON.stringify({
+        model: MODEL, temperature: (opts && opts.temperature) || 0.2,
+        max_tokens: (opts && opts.maxTokens) || 900, stream: false,
+        messages,
+      }),
+    });
+    if (!res.ok) {
+      let msg = "เกิดข้อผิดพลาดจาก Groq (HTTP " + res.status + ")";
+      try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch (e) {}
+      throw new Error(msg);
+    }
+    const j = await res.json();
+    return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
+  }
+
+  /* ---------- ตรวจคำตอบแบบเขียน ---------- */
+  const GRADE_SYSTEM =
+    "คุณเป็นผู้ตรวจข้อสอบชีววิทยาระดับมัธยมปลาย/โอลิมปิก " +
+    "หน้าที่: เปรียบเทียบคำตอบที่ผู้เรียนเขียน กับคำตอบและคำอธิบายที่เป็นเฉลย แล้วให้คะแนน 0-100 " +
+    "เกณฑ์: เนื้อหา/แนวคิดถูกต้องเป็นหลัก ยอมรับคำตอบที่ใช้คำต่างกันแต่ความหมายตรงกัน " +
+    "ถ้าถูกต้องครบให้คะแนนสูง (80-100) ถ้าถูกบางส่วนให้ 40-79 ถ้าผิดหรือไม่ตรงประเด็นให้ต่ำกว่า 40 " +
+    "ตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอก JSON " +
+    'รูปแบบ: {"score": ตัวเลข 0-100, "verdict": "ถูกต้อง|ถูกบางส่วน|ยังไม่ถูก", "feedback": "อธิบายสั้น ๆ 2-3 ประโยค ว่าทำไมได้คะแนนนี้", "missing": ["จุดที่ขาดหรือควรเพิ่ม", "..."]}';
+  function parseJSONLoose(text) {
+    let t = String(text || "").replace(/```json|```/g, "").trim();
+    try { return JSON.parse(t); } catch (e) {}
+    const m = t.match(/\{[\s\S]*\}/);
+    if (m) { try { return JSON.parse(m[0]); } catch (e) {} }
+    return null;
+  }
+  async function grade(p) {
+    const choices = p.choices || [];
+    const parts = [];
+    if (p.concept) parts.push("หัวข้อ: " + p.concept);
+    if (p.stem) parts.push("โจทย์/ข้อมูลประกอบ:\n" + p.stem);
+    if (p.question) parts.push("คำถาม: " + p.question);
+    if (choices.length) parts.push("ตัวเลือก:\n" + choices.map((c, i) => (i + 1) + ". " + c).join("\n"));
+    parts.push("คำตอบที่ถูก: " + (p.answerText != null ? p.answerText : "-"));
+    if (p.explanation) parts.push("คำอธิบายเฉลย: " + p.explanation);
+    parts.push("คำตอบของผู้เรียน: " + (p.studentAnswer || ""));
+    parts.push("ให้คะแนนและ feedback ตามรูปแบบ JSON ที่กำหนด");
+    const text = await sendOnce([{ role: "system", content: GRADE_SYSTEM }, { role: "user", content: parts.join("\n\n") }]);
+    const obj = parseJSONLoose(text);
+    if (!obj) return { score: null, verdict: "", feedback: text || "ตรวจไม่สำเร็จ", missing: [] };
+    if (typeof obj.score === "string" && obj.score.trim() !== "" && !isNaN(+obj.score)) obj.score = +obj.score;
+    if (!Array.isArray(obj.missing)) obj.missing = obj.missing ? [String(obj.missing)] : [];
+    return obj;
+  }
+
   /* ---------- escape + markdown เบา ๆ ---------- */
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -290,7 +346,7 @@
   else init();
 
   window.AITutor = {
-    open, close, toggle, explainQuestion, setKey, getKey, hasKey, showKeyPrompt,
+    open, close, toggle, explainQuestion, grade, setKey, getKey, hasKey, showKeyPrompt,
     reset: () => { history = [{ role: "system", content: SYSTEM_PROMPT }]; },
   };
 })();

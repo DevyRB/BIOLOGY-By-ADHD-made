@@ -18,6 +18,7 @@
   const LETTERS = ["ก", "ข", "ค", "ง", "จ", "ฉ"];
   const MODE_ORDER = ["m4-1", "m4-2", "m5-1", "m5-2", "m6-1", "m6-2"];
   const EXAM_ORDER = ["exam-posn", "exam-tbo"];
+  const ALL_MODES = MODE_ORDER.concat(EXAM_ORDER);
 
   /* ================= Data ================= */
   const DATA = window.BIO_DATA || {};
@@ -51,8 +52,36 @@
     });
     return out;
   };
+  const everyQuestion = () => {
+    const out = [];
+    ALL_MODES.forEach((mid) => {
+      const m = DATA[mid]; if (!m) return;
+      (m.chapters || []).forEach((ch) => (ch.questions || []).forEach((q) => out.push(q)));
+    });
+    return out;
+  };
   const modeCount = (mid) => (DATA[mid] ? DATA[mid].chapters.reduce((s, c) => s + c.questions.length, 0) : 0);
   const chapterTitle = (q) => (DATA[q._mode] ? DATA[q._mode].chapters[q._ci].title : "");
+
+  /* ================= โจทย์คำนวณ (filter) ================= */
+  const CALC_UNIT = /(mol|molar|mM|µM|μM|%|กรัม|\bkg\b|\bmg\b|µg|ng|มิลลิลิตร|ลิตร|mL|ml|µl|µL|\bcm\b|\bmm\b|µm|μm|\bnm\b|\bbp\b|kDa|kcal|kJ|นาโน|ไมโคร|มิลลิ)/i;
+  const CALC_WORD = /(คำนวณ|คำนวน|จงหา|กี่|เท่าไหร่|เท่าไร|เท่าใด|อัตราส่วน|อัตรา|ความเข้มข้น|เจือจาง|ร้อยละ|เปอร์เซ็นต์|ความน่าจะเป็น|ปริมาณ|สัดส่วน|ผลคูณ|เท่าตัว)/;
+  function isCalc(q) {
+    const qtext = String(q.q || "");
+    if (!/\d/.test(qtext)) return false;
+    return CALC_WORD.test(qtext) || CALC_UNIT.test(qtext);
+  }
+  function buildCalcMode() {
+    const groups = [];
+    ALL_MODES.forEach((mid) => {
+      const m = DATA[mid]; if (!m) return;
+      m.chapters.forEach((ch) => {
+        const qs = (ch.questions || []).filter(isCalc);
+        if (qs.length) groups.push({ title: m.title + " · " + ch.title, questions: qs });
+      });
+    });
+    DATA["__calc__"] = { title: "โจทย์คำนวณ", icon: "🧮", chapters: groups };
+  }
 
   /* ================= Storage ================= */
   const KEY = "bio_quiz_v1";
@@ -194,7 +223,8 @@
     const main = $("#app");
     main.innerHTML = "";
     ({ home: renderHome, mode: renderMode, quiz: renderQuiz, result: renderResult,
-       knowledge: renderKnowledge, stats: renderStats, flash: renderFlash }[view] || renderHome)(main, params);
+       knowledge: renderKnowledge, stats: renderStats, flash: renderFlash,
+       reels: renderReels, write: renderWrite }[view] || renderHome)(main, params);
   }
 
   /* ================= Home ================= */
@@ -265,13 +295,15 @@
 
     const sg = $("#specialGrid", wrap);
     [
-      { id: "__special__", icon: "🎲", title: "รวมทุกเนื้อหา (สุ่ม)", desc: `สุ่มจากทุกบท รวม ${allQuestions().length} ข้อ` },
-      { id: "__review__", icon: "🔁", title: "ทบทวนข้อที่ต้องทบทวน", desc: `มี ${weakQuestions().length} ข้อ • ตอบถูกจะหลุดจากรายการ` },
+      { id: "__special__", icon: "🎲", title: "รวมทุกเนื้อหา (สุ่ม)", desc: `สุ่มจากทุกบท รวม ${allQuestions().length} ข้อ`, go: "mode" },
+      { id: "__review__", icon: "🔁", title: "ทบทวนข้อที่ต้องทบทวน", desc: `มี ${weakQuestions().length} ข้อ • ตอบถูกจะหลุดจากรายการ`, go: "mode" },
+      { id: "__calc__", icon: "🧮", title: "โจทย์คำนวณ", desc: `เน้นคำนวณ แยกตามระดับชั้น/บท • ${modeCount("__calc__")} ข้อ`, go: "mode" },
+      { id: "__write__", icon: "✍️", title: "เขียนตอบ (AI ตรวจ)", desc: "เขียนคำตอบเอง ให้ AI ประเมินและให้คะแนน", go: "write" },
     ].forEach((s) => {
       const c = document.createElement("div");
       c.className = "mode-card special";
       c.innerHTML = `<div class="icon">${s.icon}</div><h3>${esc(s.title)}</h3><p>${esc(s.desc)}</p>`;
-      c.onclick = () => route("mode", s.id);
+      c.onclick = () => route(s.go, s.id === "__write__" ? null : s.id);
       sg.appendChild(c);
     });
 
@@ -762,9 +794,145 @@
     }
   }
 
+  /* ================= ชีวะฟีด (reels) ================= */
+  function reelCards(modeId) {
+    const cards = [];
+    const mids = (modeId && ALL_MODES.includes(modeId)) ? [modeId] : ALL_MODES;
+    mids.forEach((m) => {
+      const know = (KNOW[m] && KNOW[m].length) ? KNOW[m] : [];
+      know.forEach((chp) => {
+        (chp.sections || []).forEach((sec) => {
+          const body = [(sec.p || []).join("\n\n"), (sec.list || []).map((x) => "• " + x).join("\n")].filter(Boolean).join("\n\n");
+          if (String(body).trim()) cards.push({ mode: m, chapter: chp.chapter, title: sec.h || "สรุป", body, kind: "note" });
+        });
+      });
+      const mode = DATA[m];
+      (mode && mode.chapters || []).forEach((ch) => {
+        (ch.terms || []).forEach((t) => cards.push({ mode: m, chapter: ch.title, title: t.term, body: t.def, kind: "term" }));
+      });
+    });
+    return cards;
+  }
+
+  function renderReels(main, focusMode) {
+    const chosen = (typeof focusMode === "string" && ALL_MODES.includes(focusMode)) ? focusMode : "__all__";
+    const cards = reelCards(chosen === "__all__" ? null : chosen);
+    const wrap = document.createElement("div");
+    main.appendChild(wrap);
+    wrap.innerHTML = `<h2 class="section-title">🎬 ชีวะฟีด</h2>
+      <p class="section-sub">ปัด/เลื่อนขึ้น-ลง เพื่อดูทีละการ์ด — สรุปเนื้อหาและคำศัพท์ ครอบคลุมทุกบท</p>
+      <div class="tabs" id="rTabs"></div>
+      <div class="reel-bar"><button class="btn ghost" id="rUp" title="ก่อนหน้า">▲</button><span class="badge" id="rCounter">1 / ${cards.length}</span><button class="btn ghost" id="rDown">▼</button></div>
+      <div class="reel-viewport" id="rView"></div>`;
+    const tabs = $("#rTabs", wrap);
+    [{ id: "__all__", label: "🎲 ทั้งหมด" }].concat(ALL_MODES.map((m) => ({ id: m, label: DATA[m] ? DATA[m].title : m })))
+      .forEach((t) => {
+        const b = document.createElement("button");
+        b.className = "tab" + (t.id === chosen ? " active" : "");
+        b.textContent = t.label;
+        b.onclick = () => route("reels", t.id === "__all__" ? null : t.id);
+        tabs.appendChild(b);
+      });
+    const view = $("#rView", wrap);
+    if (!cards.length) { view.innerHTML = `<div class="card muted">ยังไม่มีการ์ดในโหมดนี้</div>`; return; }
+    cards.forEach((c, i) => {
+      const el = document.createElement("div");
+      el.className = "reel-card" + (c.kind === "term" ? " term" : "");
+      el.innerHTML = `<div class="reel-inner">
+        <div class="reel-meta"><span class="badge">${esc(DATA[c.mode] ? DATA[c.mode].title : c.mode)}</span><span class="badge">${esc(c.chapter)}</span>${c.kind === "term" ? '<span class="badge">คำศัพท์</span>' : ""}</div>
+        <div class="reel-title">${esc(c.title)}</div>
+        <div class="reel-body">${esc(c.body)}</div>
+        <div class="reel-idx">${i + 1} / ${cards.length}</div>
+      </div>`;
+      view.appendChild(el);
+    });
+    const counter = $("#rCounter", wrap);
+    let cur = 0;
+    const setCur = () => { const i = Math.round(view.scrollTop / view.clientHeight); if (i !== cur) { cur = i; counter.textContent = (cur + 1) + " / " + cards.length; } };
+    view.addEventListener("scroll", setCur);
+    const goTo = (i) => {
+      cur = Math.max(0, Math.min(cards.length - 1, i));
+      view.scrollTo({ top: cur * view.clientHeight, behavior: "smooth" });
+      counter.textContent = (cur + 1) + " / " + cards.length;
+    };
+    $("#rUp", wrap).onclick = () => goTo(cur - 1);
+    $("#rDown", wrap).onclick = () => goTo(cur + 1);
+  }
+
+  /* ================= เขียนตอบ (AI ตรวจ) ================= */
+  function renderWrite(main, focusMode) {
+    const chosen = (typeof focusMode === "string" && ALL_MODES.includes(focusMode)) ? focusMode : "__all__";
+    const pool = everyQuestion().filter((q) => chosen === "__all__" || q._mode === chosen);
+    const wrap = document.createElement("div");
+    main.appendChild(wrap);
+    wrap.innerHTML = `<h2 class="section-title">✍️ เขียนตอบ (AI ตรวจ)</h2>
+      <p class="section-sub">เขียนคำตอบด้วยคำของคุณเอง แล้วให้ AI ประเมินว่าตรงกับเฉลยแค่ไหน</p>
+      <div class="tabs" id="wTabs"></div><div id="wBody"></div>`;
+    const tabs = $("#wTabs", wrap);
+    [{ id: "__all__", label: "🎲 ทั้งหมด" }].concat(ALL_MODES.map((m) => ({ id: m, label: DATA[m] ? DATA[m].title : m })))
+      .forEach((t) => {
+        const b = document.createElement("button");
+        b.className = "tab" + (t.id === chosen ? " active" : "");
+        b.textContent = t.label;
+        b.onclick = () => route("write", t.id === "__all__" ? null : t.id);
+        tabs.appendChild(b);
+      });
+    if (!pool.length) { $("#wBody", wrap).innerHTML = `<div class="card muted">ไม่มีข้อในโหมดนี้</div>`; return; }
+    let cur = pool[Math.floor(Math.random() * pool.length)];
+    const pick = () => { cur = pool[Math.floor(Math.random() * pool.length)]; draw(); };
+
+    function draw() {
+      const box = $("#wBody", wrap);
+      const minfo = modeInfo(cur._mode);
+      box.innerHTML = `<div class="card">
+        <div class="q-topic">${esc(cur.concept || "")} • ${esc(minfo ? minfo.title : cur._mode)}</div>
+        ${cur.stem ? `<div class="q-stem"><div class="q-stem-head">📋 ข้อมูลประกอบ</div><div class="q-stem-body">${esc(cur.stem)}</div></div>` : ""}
+        <div class="question">${esc(cur.q)}</div>
+        <label class="muted">คำตอบของคุณ (อธิบายสั้น ๆ):</label>
+        <textarea class="write-area" id="wAns" rows="5" placeholder="พิมพ์คำตอบ/คำอธิบายของคุณ..."></textarea>
+        <div class="row" style="margin-top:14px">
+          <button class="btn primary" id="wCheck">🤖 ตรวจด้วย AI</button>
+          <button class="btn" id="wReveal">ดูเฉลย</button>
+          <button class="btn" id="wNext">ข้อต่อไป →</button>
+        </div>
+        <div id="wFb"></div>
+      </div>`;
+      $("#wNext", box).onclick = pick;
+      $("#wReveal", box).onclick = () => {
+        $("#wFb", box).innerHTML = `<div class="feedback"><h4>เฉลย: ${esc(cur.choices[cur.answer])}</h4><p>${esc(cur.explanation || "—")}</p></div>`;
+      };
+      $("#wCheck", box).onclick = async () => {
+        const ans = $("#wAns", box).value.trim();
+        if (!ans) { alert("พิมพ์คำตอบก่อนนะครับ"); return; }
+        if (!window.AITutor) { alert("โหลดตัวช่วย AI ไม่สำเร็จ"); return; }
+        const fb = $("#wFb", box);
+        fb.innerHTML = `<div class="feedback"><p>⏳ กำลังให้ AI ตรวจคำตอบ...</p></div>`;
+        try {
+          const res = await window.AITutor.grade({
+            concept: cur.concept, stem: cur.stem, question: cur.q,
+            choices: cur.choices, answerText: cur.choices[cur.answer],
+            explanation: cur.explanation, studentAnswer: ans,
+          });
+          const score = (res && typeof res.score === "number") ? res.score : null;
+          fb.innerHTML = `<div class="feedback ${score != null && score >= 60 ? "ok" : "no"}">
+            <h4>${score != null ? "คะแนนจาก AI: " + score + "/100" : "ผลตรวจ"}${res.verdict ? " — " + esc(res.verdict) : ""}</h4>
+            <p>${esc(res.feedback || "")}</p>
+            ${(res.missing && res.missing.length) ? `<p style="margin-top:8px"><b>ควรเพิ่ม/ปรับ:</b></p><ul>${res.missing.map((x) => "<li>" + esc(x) + "</li>").join("")}</ul>` : ""}
+            <hr style="border-color:var(--line)"><h4 style="font-size:14px">เฉลย</h4>
+            <p><b>${esc(cur.choices[cur.answer])}</b> — ${esc(cur.explanation || "")}</p></div>`;
+        } catch (e) {
+          fb.innerHTML = `<div class="feedback no"><p>${esc(e && e.code === "NO_KEY" ? "ต้องใส่คีย์ Groq ก่อน — กดปุ่ม 🤖 มุมขวาล่าง แล้วกด ⚙️" : ((e && e.message) || "ตรวจไม่สำเร็จ"))}</p></div>`;
+          if (e && e.code === "NO_KEY" && window.AITutor) window.AITutor.showKeyPrompt();
+        }
+      };
+    }
+    draw();
+  }
+
   /* ================= Boot ================= */
   document.addEventListener("DOMContentLoaded", () => {
     ensureIds();
+    buildCalcMode();
     $("#brandHome").onclick = () => route("home");
     $$(".navbtn").forEach((b) => (b.onclick = () => route(b.dataset.nav)));
     renderProfileChip();

@@ -352,9 +352,44 @@ button.ai-explain { margin-left: auto; }
   .ai-fab { right: 14px; bottom: 14px; }
 }
 
+/* ---------- ชีวะฟีด (reels) ---------- */
+.reel-bar { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 12px; }
+.reel-bar .badge { min-width: 72px; text-align: center; }
+.reel-viewport {
+  height: min(72vh, 640px); overflow-y: auto; scroll-snap-type: y mandatory;
+  border: 1px solid var(--line); border-radius: 18px; background: #00000022;
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.reel-viewport::-webkit-scrollbar { display: none; }
+.reel-card {
+  scroll-snap-align: start; min-height: 100%; box-sizing: border-box;
+  display: flex; padding: 14px;
+}
+.reel-inner {
+  flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
+  background: linear-gradient(160deg, #1c3f3355, var(--card-solid));
+  border: 1px solid var(--line); border-radius: 16px; padding: 22px;
+}
+.reel-card.term .reel-inner { background: linear-gradient(160deg, #1a3a5544, var(--card-solid)); }
+.reel-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.reel-title { font-size: 20px; font-weight: 800; line-height: 1.3; }
+.reel-body { white-space: pre-line; line-height: 1.85; color: #dcefe6; font-size: 15px; }
+.reel-idx { margin-top: auto; text-align: right; color: var(--muted); font-size: 12px; }
+
+/* ---------- เขียนตอบ ---------- */
+.write-area {
+  width: 100%; margin-top: 8px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: #ffffff0a; color: var(--text);
+  font: inherit; font-size: 15px; line-height: 1.6; resize: vertical; min-height: 110px;
+}
+.write-area:focus { outline: none; border-color: var(--accent); }
+.feedback ul { margin: 6px 0 0; padding-left: 20px; }
+.feedback li { margin: 3px 0; }
+
 @media (max-width: 620px) {
   .topnav { order: 3; width: 100%; margin-left: 0; justify-content: center; }
   .profile { margin-left: auto; }
   main#app { margin-top: 16px; }
   .question { font-size: 18px; }
+  .reel-viewport { height: 68vh; }
 }
