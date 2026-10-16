@@ -353,28 +353,75 @@ button.ai-explain { margin-left: auto; }
 }
 
 /* ---------- ชีวะฟีด (reels) ---------- */
-.reel-bar { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 12px; }
-.reel-bar .badge { min-width: 72px; text-align: center; }
+.reel-frame { position: relative; }
+.reel-progress { height: 4px; background: #ffffff22; border-radius: 999px; overflow: hidden; margin-bottom: 10px; }
+.reel-progress i { display: block; height: 100%; width: 2%; background: linear-gradient(90deg, var(--accent), #7ef0c8); transition: width .3s ease; }
 .reel-viewport {
-  height: min(72vh, 640px); overflow-y: auto; scroll-snap-type: y mandatory;
-  border: 1px solid var(--line); border-radius: 18px; background: #00000022;
-  scrollbar-width: none; -ms-overflow-style: none;
+  height: min(78vh, 720px); overflow-y: auto; scroll-snap-type: y mandatory;
+  border-radius: 22px; background: #05070a; box-shadow: 0 18px 50px #0009;
+  scrollbar-width: none; -ms-overflow-style: none; position: relative;
 }
 .reel-viewport::-webkit-scrollbar { display: none; }
 .reel-card {
-  scroll-snap-align: start; min-height: 100%; box-sizing: border-box;
-  display: flex; padding: 14px;
+  position: relative; scroll-snap-align: start; min-height: 100%; box-sizing: border-box;
+  display: flex; overflow: hidden;
+}
+.reel-bg {
+  position: absolute; inset: -20%;
+  background:
+    radial-gradient(circle at 28% 18%, var(--t1), transparent 55%),
+    radial-gradient(circle at 78% 88%, var(--t2), transparent 60%),
+    linear-gradient(160deg, #0a100e, #05070a);
+  animation: reelFloat 16s ease-in-out infinite alternate;
+}
+@keyframes reelFloat {
+  from { transform: scale(1.05) translate(-2%, -2%); }
+  to { transform: scale(1.2) translate(2%, 3%); }
 }
 .reel-inner {
-  flex: 1; display: flex; flex-direction: column; gap: 12px; overflow-y: auto;
-  background: linear-gradient(160deg, #1c3f3355, var(--card-solid));
-  border: 1px solid var(--line); border-radius: 16px; padding: 22px;
+  position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; gap: 14px;
+  padding: 22px 20px calc(20px + env(safe-area-inset-bottom));
 }
-.reel-card.term .reel-inner { background: linear-gradient(160deg, #1a3a5544, var(--card-solid)); }
 .reel-meta { display: flex; flex-wrap: wrap; gap: 6px; }
-.reel-title { font-size: 20px; font-weight: 800; line-height: 1.3; }
-.reel-body { white-space: pre-line; line-height: 1.85; color: #dcefe6; font-size: 15px; }
-.reel-idx { margin-top: auto; text-align: right; color: var(--muted); font-size: 12px; }
+.reel-chip {
+  font-size: 11px; padding: 5px 11px; border-radius: 999px;
+  background: #ffffff26; color: #fff; backdrop-filter: blur(6px);
+}
+.reel-chip.alt { background: #ffffff14; color: #dcefe6; }
+.reel-chip.hot { background: #ffd1662e; color: #ffd166; }
+.reel-hero { margin: auto 0; display: flex; flex-direction: column; gap: 14px; }
+.reel-emoji { font-size: 46px; line-height: 1; filter: drop-shadow(0 6px 14px #0009); animation: reelPop .5s ease; }
+.reel-title { font-size: clamp(24px, 5vw, 34px); font-weight: 900; line-height: 1.2; color: #fff; text-shadow: 0 2px 18px #000a; }
+.reel-body { white-space: pre-line; line-height: 1.9; color: #e9f7f1; font-size: clamp(15px, 2.6vw, 17px); text-shadow: 0 1px 8px #0009; }
+.reel-actions { display: flex; gap: 8px; }
+.reel-act {
+  display: flex; align-items: center; gap: 6px; cursor: pointer; color: #fff;
+  border: 1px solid #ffffff26; background: #00000055; backdrop-filter: blur(8px);
+  border-radius: 999px; padding: 9px 14px; font-size: 16px; line-height: 1;
+}
+.reel-act b { font-size: 13px; font-weight: 700; }
+.reel-act.liked { background: #ff4d6d33; border-color: #ff4d6d99; animation: reelPop .3s ease; }
+.reel-hint { text-align: center; color: #ffffffaa; font-size: 12px; animation: hintBob 1.8s ease-in-out infinite; }
+@keyframes hintBob { 0%,100% { transform: translateY(0); opacity: .55; } 50% { transform: translateY(-5px); opacity: 1; } }
+@keyframes reelPop { 0% { transform: scale(.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.reel-burst {
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(.4);
+  font-size: 96px; opacity: 0; pointer-events: none; z-index: 5;
+}
+.reel-burst.go { animation: burst .7s ease forwards; }
+@keyframes burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.3); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+}
+.reel-bar { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+.reel-bar .badge { min-width: 72px; text-align: center; }
+.reel-round {
+  width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 16px; color: #fff;
+  border: 1px solid #ffffff26; background: #00000055; backdrop-filter: blur(6px);
+}
+.reel-round.on { background: var(--accent); border-color: var(--accent); color: #06231b; }
+.reel-tip { text-align: center; color: var(--muted); font-size: 12px; margin: 10px 0 0; }
 
 /* ---------- เขียนตอบ ---------- */
 .write-area {
@@ -391,5 +438,7 @@ button.ai-explain { margin-left: auto; }
   .profile { margin-left: auto; }
   main#app { margin-top: 16px; }
   .question { font-size: 18px; }
-  .reel-viewport { height: 68vh; }
+  .reel-viewport { height: 74vh; }
+  .reel-hero { gap: 10px; }
+  .reel-title { font-size: 24px; }
 }

@@ -320,6 +320,15 @@
     else addBubble("ai", "บันทึกคีย์เรียบร้อยครับ ✅ ถามได้เลย");
   }
 
+  /* ---------- ถามอิสระ ---------- */
+  function ask(text) {
+    const t = String(text || "").trim();
+    if (!t) { open(); return; }
+    buildUI();
+    open();
+    submit(t);
+  }
+
   /* ---------- อธิบายรายข้อจากควิซ ---------- */
   function explainQuestion(obj) {
     obj = obj || {};
@@ -346,7 +355,7 @@
   else init();
 
   window.AITutor = {
-    open, close, toggle, explainQuestion, grade, setKey, getKey, hasKey, showKeyPrompt,
+    open, close, toggle, ask, explainQuestion, grade, setKey, getKey, hasKey, showKeyPrompt,
     reset: () => { history = [{ role: "system", content: SYSTEM_PROMPT }]; },
   };
 })();

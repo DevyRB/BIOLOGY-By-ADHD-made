@@ -215,8 +215,10 @@
 
   /* ================= Router ================= */
   let current = "home";
+  let reelTimer = null;
   function route(view, params) {
     current = view;
+    if (reelTimer) { clearInterval(reelTimer); reelTimer = null; }
     if (quizKeyHandler) { document.removeEventListener("keydown", quizKeyHandler); quizKeyHandler = null; }
     $$(".navbtn").forEach((b) => b.classList.toggle("active", b.dataset.nav === view));
     window.scrollTo(0, 0);
@@ -795,6 +797,32 @@
   }
 
   /* ================= ชีวะฟีด (reels) ================= */
+  const REEL_TONES = [
+    ["#12b886", "#0a3d5c"], ["#7048e8", "#241a4d"], ["#f06595", "#3a0b2e"],
+    ["#f59f00", "#3a2405"], ["#22b8cf", "#06333f"], ["#4dabf7", "#0b2440"],
+    ["#cc5de8", "#2a0b3d"], ["#51cf66", "#0b3a1c"],
+  ];
+  function toneFor(c) {
+    const s = String(c.chapter || "") + c.title;
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return REEL_TONES[h % REEL_TONES.length];
+  }
+  function burstHeart(card) {
+    const b = card.querySelector(".reel-burst");
+    if (!b) return;
+    b.classList.remove("go");
+    void b.offsetWidth;
+    b.classList.add("go");
+  }
+  function toast(host, msg) {
+    const t = document.createElement("div");
+    t.className = "reel-tip";
+    t.style.cssText = "position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;color:#fff;padding:8px 16px;border-radius:999px;z-index:9999";
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 1400);
+  }
   function reelCards(modeId) {
     const cards = [];
     const mids = (modeId && ALL_MODES.includes(modeId)) ? [modeId] : ALL_MODES;
@@ -820,10 +848,20 @@
     const wrap = document.createElement("div");
     main.appendChild(wrap);
     wrap.innerHTML = `<h2 class="section-title">🎬 ชีวะฟีด</h2>
-      <p class="section-sub">ปัด/เลื่อนขึ้น-ลง เพื่อดูทีละการ์ด — สรุปเนื้อหาและคำศัพท์ ครอบคลุมทุกบท</p>
+      <p class="section-sub">ปัด/เลื่อนขึ้น-ลง ดูทีละการ์ด เหมือนดูคลิป — สรุปเนื้อหาและคำศัพท์ครบทุกบท</p>
       <div class="tabs" id="rTabs"></div>
-      <div class="reel-bar"><button class="btn ghost" id="rUp" title="ก่อนหน้า">▲</button><span class="badge" id="rCounter">1 / ${cards.length}</span><button class="btn ghost" id="rDown">▼</button></div>
-      <div class="reel-viewport" id="rView"></div>`;
+      <div class="reel-frame">
+        <div class="reel-progress"><i id="rProg"></i></div>
+        <div class="reel-viewport" id="rView"></div>
+        <div class="reel-bar">
+          <button class="reel-round" id="rPlay" title="เล่นอัตโนมัติ">▶</button>
+          <button class="reel-round" id="rUp" title="ก่อนหน้า">▲</button>
+          <span class="badge" id="rCounter">1 / ${cards.length}</span>
+          <button class="reel-round" id="rDown" title="ถัดไป">▼</button>
+          <button class="reel-round" id="rShuffle" title="สุ่มการ์ด">🔀</button>
+        </div>
+        <p class="reel-tip">💡 ดับเบิลแตะเพื่อกดหัวใจ • กด 🤖 ให้ AI อธิบายการ์ดนี้</p>
+      </div>`;
     const tabs = $("#rTabs", wrap);
     [{ id: "__all__", label: "🎲 ทั้งหมด" }].concat(ALL_MODES.map((m) => ({ id: m, label: DATA[m] ? DATA[m].title : m })))
       .forEach((t) => {
@@ -835,28 +873,95 @@
       });
     const view = $("#rView", wrap);
     if (!cards.length) { view.innerHTML = `<div class="card muted">ยังไม่มีการ์ดในโหมดนี้</div>`; return; }
-    cards.forEach((c, i) => {
+
+    cards.forEach((c) => {
       const el = document.createElement("div");
       el.className = "reel-card" + (c.kind === "term" ? " term" : "");
-      el.innerHTML = `<div class="reel-inner">
-        <div class="reel-meta"><span class="badge">${esc(DATA[c.mode] ? DATA[c.mode].title : c.mode)}</span><span class="badge">${esc(c.chapter)}</span>${c.kind === "term" ? '<span class="badge">คำศัพท์</span>' : ""}</div>
-        <div class="reel-title">${esc(c.title)}</div>
-        <div class="reel-body">${esc(c.body)}</div>
-        <div class="reel-idx">${i + 1} / ${cards.length}</div>
-      </div>`;
+      const tone = toneFor(c);
+      el.style.setProperty("--t1", tone[0]);
+      el.style.setProperty("--t2", tone[1]);
+      const emoji = (DATA[c.mode] && DATA[c.mode].icon) || "🧬";
+      el.innerHTML = `<div class="reel-bg"></div>
+        <div class="reel-inner">
+          <div class="reel-meta">
+            <span class="reel-chip">${emoji} ${esc(DATA[c.mode] ? DATA[c.mode].title : c.mode)}</span>
+            <span class="reel-chip alt">${esc(c.chapter)}</span>
+            ${c.kind === "term" ? '<span class="reel-chip hot">คำศัพท์</span>' : ""}
+          </div>
+          <div class="reel-hero">
+            <div class="reel-emoji">${emoji}</div>
+            <div class="reel-title">${esc(c.title)}</div>
+            <div class="reel-body">${esc(c.body)}</div>
+          </div>
+          <div class="reel-actions">
+            <button class="reel-act" data-act="like">🤍<b>0</b></button>
+            <button class="reel-act" data-act="ai">🤖 อธิบาย</button>
+            <button class="reel-act" data-act="share">⤴️ แชร์</button>
+          </div>
+          <div class="reel-hint">ปัดขึ้น ▲</div>
+        </div>
+        <div class="reel-burst">❤️</div>`;
+
+      el.querySelector('[data-act="like"]').onclick = (e) => {
+        e.stopPropagation();
+        const b = e.currentTarget;
+        const liked = b.classList.toggle("liked");
+        b.firstChild.textContent = liked ? "❤️" : "🤍";
+        const num = b.querySelector("b");
+        num.textContent = liked ? (+num.textContent || 0) + 1 : Math.max(0, (+num.textContent || 1) - 1);
+        if (liked) burstHeart(el);
+      };
+      el.querySelector('[data-act="ai"]').onclick = (e) => {
+        e.stopPropagation();
+        if (window.AITutor) window.AITutor.ask("อธิบายและสรุปเนื้อหาชีววิทยาเรื่อง \"" + c.title + "\" (บท " + c.chapter + ") ให้เข้าใจง่าย ๆ พร้อมยกตัวอย่างหรือเชื่อมโยงให้เห็นภาพ\n\nเนื้อหา: " + c.body);
+      };
+      el.querySelector('[data-act="share"]').onclick = (e) => {
+        e.stopPropagation();
+        const text = c.title + " — " + c.body;
+        if (navigator.share) { navigator.share({ title: c.title, text }).catch(() => {}); }
+        else if (navigator.clipboard) { navigator.clipboard.writeText(text).then(() => toast(wrap, "คัดลอกแล้ว ✅")).catch(() => {}); }
+      };
+      el.ondblclick = () => burstHeart(el);
       view.appendChild(el);
     });
+
+    const progress = $("#rProg", wrap);
     const counter = $("#rCounter", wrap);
     let cur = 0;
-    const setCur = () => { const i = Math.round(view.scrollTop / view.clientHeight); if (i !== cur) { cur = i; counter.textContent = (cur + 1) + " / " + cards.length; } };
+    const pageH = () => (view.clientHeight || 1);
+    const setCur = () => {
+      const i = Math.round(view.scrollTop / pageH());
+      if (i !== cur && i >= 0 && i < cards.length) {
+        cur = i;
+        counter.textContent = (cur + 1) + " / " + cards.length;
+      }
+      progress.style.width = Math.max(2, ((cur + 1) / cards.length) * 100) + "%";
+    };
     view.addEventListener("scroll", setCur);
+    progress.style.width = Math.max(2, (1 / cards.length) * 100) + "%";
     const goTo = (i) => {
       cur = Math.max(0, Math.min(cards.length - 1, i));
-      view.scrollTo({ top: cur * view.clientHeight, behavior: "smooth" });
+      if (typeof view.scrollTo === "function") view.scrollTo({ top: cur * pageH(), behavior: "smooth" });
+      else view.scrollTop = cur * pageH();
       counter.textContent = (cur + 1) + " / " + cards.length;
+      progress.style.width = ((cur + 1) / cards.length * 100) + "%";
     };
     $("#rUp", wrap).onclick = () => goTo(cur - 1);
     $("#rDown", wrap).onclick = () => goTo(cur + 1);
+    $("#rShuffle", wrap).onclick = () => goTo(Math.floor(Math.random() * cards.length));
+
+    const playBtn = $("#rPlay", wrap);
+    let playing = false;
+    const stopPlay = () => { playing = false; playBtn.textContent = "▶"; playBtn.classList.remove("on"); if (reelTimer) { clearInterval(reelTimer); reelTimer = null; } };
+    $("#rPlay", wrap).onclick = () => {
+      if (playing) { stopPlay(); return; }
+      playing = true;
+      playBtn.textContent = "⏸";
+      playBtn.classList.add("on");
+      reelTimer = setInterval(() => goTo(cur + 1 >= cards.length ? 0 : cur + 1), 3500);
+    };
+    view.addEventListener("wheel", stopPlay, { passive: true });
+    view.addEventListener("touchstart", stopPlay, { passive: true });
   }
 
   /* ================= เขียนตอบ (AI ตรวจ) ================= */
